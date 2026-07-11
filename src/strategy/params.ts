@@ -72,6 +72,17 @@ export const STRATEGY_PARAMS = {
     maxPositionsPerMatch: 6,
   },
 
+  /** Measurement layer. */
+  measurement: {
+    /**
+     * CLV horizon: compare the entry prob to the line's demargined prob this
+     * long after the decision. In-play lines converge to the outcome, so a
+     * "last quote" close would restate the result; the horizon isolates
+     * near-term market agreement with the position.
+     */
+    clvHorizonMs: 10 * 60_000,
+  },
+
   /** Phase gates: trade only in open play of regulation time. */
   gates: {
     tradableStatusIds: [2, 4],

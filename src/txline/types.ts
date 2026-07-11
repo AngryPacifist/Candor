@@ -42,6 +42,14 @@ export type ScoreBreakdown = Record<
   Record<string, Record<string, number>>
 >;
 
+/**
+ * Stat-key period bands, GOALS, AS OBSERVED ON THE LIVE FEED (game_finalised
+ * records of two full recordings — this contradicts the docs' table):
+ *   +1000 = H1 · +2000 = halftime CUMULATIVE (mirrors H1) · +3000 = H2
+ * The docs claim +2000 = H2 and +3000 = ET1. Regulation = 1000-band + 3000-band.
+ * Bands +4000..+7000 were all zero in both (no-ET) matches; their exact
+ * semantics (ET/pens) are unverified — treat ET matches with care.
+ */
 export interface ScoreRecord {
   FixtureId: number;
   GameState: string;
