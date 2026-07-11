@@ -1,6 +1,7 @@
 import { fmtPct, fmtPrice, fmtPts, fmtUnits, humanMarket, timeAgo } from "../lib/format";
 import type { PositionRow } from "../lib/queries";
 import { Badge, Empty, outcomeTone, TxLink } from "./ui";
+import { VerifyButton } from "./verify-button";
 
 export function PositionsTable({ rows, showResult = true }: { rows: PositionRow[]; showResult?: boolean }) {
   if (rows.length === 0) {
@@ -25,7 +26,8 @@ export function PositionsTable({ rows, showResult = true }: { rows: PositionRow[
             {showResult ? <th className="py-2 pr-3 font-medium">Result</th> : null}
             {showResult ? <th className="py-2 pr-3 font-medium">CLV</th> : null}
             <th className="py-2 pr-3 font-medium">Commit</th>
-            <th className="py-2 font-medium">Proof</th>
+            <th className="py-2 pr-3 font-medium">Proof</th>
+            <th className="py-2 font-medium">Check it</th>
           </tr>
         </thead>
         <tbody>
@@ -68,7 +70,7 @@ export function PositionsTable({ rows, showResult = true }: { rows: PositionRow[
                   <Badge tone={p.commit_status === "failed" ? "warn" : "muted"}>{p.commit_status}</Badge>
                 )}
               </td>
-              <td className="py-2.5">
+              <td className="py-2.5 pr-3">
                 {p.proof_status === "proven" && p.proof_sig ? (
                   <span className="flex flex-col gap-0.5">
                     <Badge tone="pos">proven</Badge>
@@ -81,6 +83,9 @@ export function PositionsTable({ rows, showResult = true }: { rows: PositionRow[
                 ) : (
                   <span className="text-xs text-faint">at settlement</span>
                 )}
+              </td>
+              <td className="py-2.5">
+                <VerifyButton positionId={p.id} commitSig={p.commit_sig} />
               </td>
             </tr>
           ))}
