@@ -1,0 +1,26 @@
+{
+  "name": "candor",
+  "version": "0.1.0",
+  "description": "Candor — the sports trading agent that cannot lie about its record. TxLINE-powered, Solana-anchored.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "migrate": "tsx src/db/migrate.ts",
+    "worker": "tsx src/worker/main.ts"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/web3.js": "^1.98.4",
+    "bn.js": "^5.2.5",
+    "dotenv": "^17.4.2",
+    "pg": "^8.13.0"
+  }
+}

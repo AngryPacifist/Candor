@@ -1,0 +1,23 @@
+# Project brain / internal docs (never shipped)
+.agents/
+resources/
+CLAUDE.md
+
+# Env / secrets / keypairs
+.env
+.env.*
+!.env.example
+.secrets/
+*keypair*.json
+
+# Local tooling / scratch
+scripts/
+tools/
+scratchpad/
+
+# Node / build artifacts
+node_modules/
+.next/
+dist/
+*.tsbuildinfo
+npm-debug.log*
