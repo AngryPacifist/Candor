@@ -83,6 +83,9 @@ async function main(): Promise<void> {
   const commitRetry = setInterval(() => {
     engine.retryFailedCommits().catch((e) => log(`commit retry sweep failed: ${e.message}`));
   }, COMMIT_RETRY_MS);
+  const proofRetry = setInterval(() => {
+    engine.retryPendingProofs().catch((e) => log(`proof retry sweep failed: ${e.message}`));
+  }, 5 * 60 * 1000);
 
   // Daily decisions-root: commit yesterday's Merkle root of the full signal
   // log once per UTC day (checked half-hourly and at boot).
@@ -166,6 +169,7 @@ async function main(): Promise<void> {
     clearInterval(oddsFlush);
     clearInterval(evalTimer);
     clearInterval(commitRetry);
+    clearInterval(proofRetry);
     clearInterval(decisionsTimer);
     clearInterval(status);
     health.close();

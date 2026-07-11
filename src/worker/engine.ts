@@ -267,6 +267,32 @@ export class AgentEngine {
     for (const row of res.rows) await this.commitWithLogging(Number(row.id));
   }
 
+  /**
+   * Retry proofs that failed for transient reasons (called on a timer).
+   * TxODDS anchors score batches in windows, so stat-validation 404s for a
+   * freshly finalised record — observed live on the agent's first settlement.
+   * Structural reasons (extra time, void, result mismatch) are not retried.
+   */
+  async retryPendingProofs(): Promise<void> {
+    const res = await this.deps.pool.query(
+      `SELECT DISTINCT ON (pr.position_id) pr.position_id, pr.status, pr.error
+       FROM proofs pr JOIN settlements s ON s.position_id = pr.position_id
+       WHERE s.settled_at > now() - interval '24 hours'
+       ORDER BY pr.position_id, pr.id DESC`
+    );
+    for (const row of res.rows) {
+      if (row.status !== "proof_unavailable") continue;
+      const err: string = row.error ?? "";
+      if (!/HTTP 404|HTTP 5\d\d|HTTP 429|fetch|network|timeout|unreachable|blockhash/i.test(err)) continue;
+      const proof = await proveSettlement(this.deps.pool, this.deps.client, Number(row.position_id));
+      if (proof.status === "proven") {
+        this.counters.proofs++;
+        this.deps.log(`PROVEN (retry) position ${row.position_id}: result=${proof.result} tx ${proof.broadcastSig}`);
+      }
+      await new Promise((r) => setTimeout(r, 2_000));
+    }
+  }
+
   private async settleAndProve(fixtureId: number): Promise<void> {
     const f = this.fx(fixtureId);
     if (f.settling) return;
