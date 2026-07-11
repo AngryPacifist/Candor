@@ -28,8 +28,16 @@ export async function GET() {
        ) pr ON true
        ORDER BY p.id`
     ),
-    pool.query(`SELECT key, value, updated_at FROM agent_state WHERE key IN ('bankroll_units','worker_heartbeat','last_commit_sig')`),
+    pool.query(
+      `SELECT key, value, updated_at FROM agent_state
+       WHERE key IN ('bankroll_units','worker_heartbeat','last_commit_sig','last_decisions_sig')
+          OR key LIKE 'decisions_root_%'`
+    ),
   ]);
+  const signals = await pool.query(
+    `SELECT id, ts, fixture_id, family, market_key, side, edge, decision, reason, position_id
+     FROM signals ORDER BY id LIMIT 5000`
+  );
 
   const agentState: Record<string, unknown> = {};
   for (const row of state.rows) agentState[row.key] = row.value;
@@ -45,6 +53,9 @@ export async function GET() {
         "sha256(payloadCanonical) must equal payloadHash, which is committed in the memo tx commitSig; prevCommitSig chains the record; proofSig certifies the settlement on-chain via validate_stat_v2.",
       state: agentState,
       positions: positions.rows,
+      signals: signals.rows,
+      decisionsRootNote:
+        "daily memo: candor|v1|decisions|<date>|root:<merkle root>|n:<count>|prev:<sig>. Leaves are sha256 of the canonical signal JSON (id, ts, fixtureId, family, marketKey, side, edge, decision, reason), paired left-to-right, odd node duplicated.",
     },
     { headers: { "cache-control": "public, max-age=30" } }
   );

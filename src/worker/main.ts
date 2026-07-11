@@ -5,7 +5,9 @@
 // game_finalised, and broadcasts settlement proofs. Restart-safe: state
 // re-warms from DB + snapshots on boot.
 
+import { createServer } from "node:http";
 import { closePool, pool } from "../db/index.js";
+import { commitDecisionsRoot } from "../chain/decisions-root.js";
 import { loadAgentKeypair, mainnetConnection } from "../chain/solana.js";
 import { syncFixtures } from "../ingest/fixtures.js";
 import { OddsBuffer } from "../ingest/odds.js";
@@ -33,11 +35,13 @@ async function main(): Promise<void> {
   const known = await syncFixtures(client, pool);
   log(`boot: ${known.size} fixtures known · params ${STRATEGY_PARAMS.version} hash=${STRATEGY_PARAMS_HASH.slice(0, 16)}`);
 
+  const conn = mainnetConnection();
+  const agent = loadAgentKeypair();
   const engine = new AgentEngine({
     pool,
     client,
-    conn: mainnetConnection(),
-    agent: loadAgentKeypair(),
+    conn,
+    agent,
     params: STRATEGY_PARAMS,
     log,
   });
@@ -80,27 +84,91 @@ async function main(): Promise<void> {
     engine.retryFailedCommits().catch((e) => log(`commit retry sweep failed: ${e.message}`));
   }, COMMIT_RETRY_MS);
 
+  // Daily decisions-root: commit yesterday's Merkle root of the full signal
+  // log once per UTC day (checked half-hourly and at boot).
+  const decisionsSweep = () => {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    commitDecisionsRoot(pool, conn, agent, yesterday)
+      .then((r) => {
+        if (r.status === "committed") log(`decisions root ${yesterday}: n=${r.n} tx ${r.sig}`);
+        else if (r.status === "failed") log(`decisions root ${yesterday} FAILED: ${r.error}`);
+      })
+      .catch((e) => log(`decisions root sweep error: ${e.message}`));
+  };
+  decisionsSweep();
+  const decisionsTimer = setInterval(decisionsSweep, 30 * 60 * 1000);
+
+  let statusTick = 0;
+  let lamports: number | null = null;
+  let staleOpen = 0;
   const status = setInterval(() => {
+    statusTick++;
     const e = engine.counters;
     log(
       `live · scores:${counters.scores} odds:${counters.odds} (flushed:${counters.flushed}, buffered:${oddsBuffer.size}) hb:${counters.heartbeats} disconnects:${counters.disconnects} foldErrors:${counters.foldErrors} · agent: entries:${e.entries} jumps:${e.jumps} commits:${e.commits}/${e.commitFailures}f settled:${e.settledPositions} proofs:${e.proofs}/${e.proofUnavailable}u`
     );
+    if (statusTick % 10 === 1) {
+      conn
+        .getBalance(agent.publicKey)
+        .then((b) => {
+          lamports = b;
+          if (b < 3_000_000) log(`WARNING: agent wallet low: ${b} lamports — commits/proofs at risk`);
+        })
+        .catch(() => undefined);
+      engine
+        .staleOpenPositions()
+        .then((n) => void (staleOpen = n))
+        .catch(() => undefined);
+    }
     pool
       .query(
         `INSERT INTO agent_state (key, value, updated_at)
          VALUES ('worker_heartbeat', $1, now())
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-        [JSON.stringify({ ...counters, agent: { ...e }, paramsHash: STRATEGY_PARAMS_HASH.slice(0, 16), at: Date.now() })]
+        [
+          JSON.stringify({
+            ...counters,
+            agent: { ...e },
+            paramsHash: STRATEGY_PARAMS_HASH.slice(0, 16),
+            walletLamports: lamports,
+            staleOpenPositions: staleOpen,
+            at: Date.now(),
+          }),
+        ]
       )
       .catch((e2) => log(`heartbeat write failed: ${e2.message}`));
   }, STATUS_MS);
+
+  // Health endpoint for the hosting platform.
+  const health = createServer((req, res) => {
+    if (req.url === "/health") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          ok: true,
+          counters,
+          agent: engine.counters,
+          paramsHash: STRATEGY_PARAMS_HASH.slice(0, 16),
+          walletLamports: lamports,
+          staleOpenPositions: staleOpen,
+        })
+      );
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+  const healthPort = Number(process.env.WORKER_HEALTH_PORT ?? 8787);
+  health.listen(healthPort, () => log(`health endpoint on :${healthPort}/health`));
 
   const stopTimers = (): void => {
     clearInterval(fixtureSync);
     clearInterval(oddsFlush);
     clearInterval(evalTimer);
     clearInterval(commitRetry);
+    clearInterval(decisionsTimer);
     clearInterval(status);
+    health.close();
   };
 
   process.on("SIGINT", () => {

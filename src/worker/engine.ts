@@ -123,6 +123,53 @@ export class AgentEngine {
       this.deps.log(`fixture ${rec.FixtureId} finalised at seq ${rec.Seq} — settlement scheduled`);
       void this.settleAndProve(rec.FixtureId);
     }
+    // Abandoned (15), Cancelled (16), coverage-cancelled (17), Postponed (19):
+    // the match will not produce a settlement-grade record — void open positions.
+    if (rec.StatusId !== undefined && [15, 16, 17, 19].includes(rec.StatusId) && !f.finalised) {
+      f.finalised = true;
+      void this.voidFixture(rec.FixtureId, `match status ${rec.StatusId} (abandoned/cancelled/postponed)`);
+    }
+  }
+
+  private async voidFixture(fixtureId: number, reason: string): Promise<void> {
+    try {
+      const voided = await this.ledger.voidFixture(fixtureId, reason);
+      this.counters.settledPositions += voided.length;
+      this.bankrollCache = null;
+      if (voided.length > 0)
+        this.deps.log(`VOIDED fixture ${fixtureId}: ${voided.length} position(s) — ${reason}`);
+      for (const v of voided) {
+        await this.deps.pool.query(
+          `INSERT INTO proofs (position_id, status, stat_keys, strategy, error)
+           VALUES ($1, 'proof_unavailable', '{}', 'null', $2)`,
+          [v.positionId, `voided: ${reason}`]
+        );
+      }
+      this.detector.forget(fixtureId);
+      this.live.delete(fixtureId);
+    } catch (e) {
+      this.deps.log(`void failed for fixture ${fixtureId}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /**
+   * Watchdog: open positions on fixtures whose state stopped updating are a
+   * production hazard (coverage died before game_finalised). Returns the
+   * count for the heartbeat; logs loudly when nonzero.
+   */
+  async staleOpenPositions(): Promise<number> {
+    const res = await this.deps.pool.query(
+      `SELECT count(*)::int AS n
+       FROM positions p
+       JOIN fixtures f ON f.fixture_id = p.fixture_id
+       LEFT JOIN match_state m ON m.fixture_id = p.fixture_id
+       WHERE p.status = 'open'
+         AND f.start_time < now() - interval '4 hours'
+         AND (m.updated_at IS NULL OR m.updated_at < now() - interval '30 minutes')`
+    );
+    const n: number = res.rows[0].n;
+    if (n > 0) this.deps.log(`ALARM: ${n} open position(s) on stale fixtures — coverage may have died before finalisation`);
+    return n;
   }
 
   /** Called on a timer; evaluates every fixture currently in a tradable phase. */

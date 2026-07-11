@@ -216,6 +216,29 @@ export class Ledger {
   }
 
   /**
+   * Void every open position of a fixture (abandoned, cancelled, postponed,
+   * or coverage-cancelled matches). Stakes return: pnl 0, bankroll unchanged.
+   */
+  async voidFixture(fixtureId: number, reason: string): Promise<SettledPosition[]> {
+    const open = await this.pool.query(
+      `SELECT id FROM positions WHERE fixture_id = $1 AND status = 'open' ORDER BY id`,
+      [fixtureId]
+    );
+    const out: SettledPosition[] = [];
+    const bankroll = await this.getBankroll();
+    for (const row of open.rows) {
+      await this.pool.query(
+        `INSERT INTO settlements (position_id, outcome, pnl_units, bankroll_after, evidence)
+         VALUES ($1, 'void', 0, $2, $3)`,
+        [row.id, bankroll, JSON.stringify({ reason })]
+      );
+      await this.pool.query(`UPDATE positions SET status = 'void' WHERE id = $1`, [row.id]);
+      out.push({ positionId: Number(row.id), outcome: "void", pnlUnits: 0, clvPts: null, bankrollAfter: bankroll });
+    }
+    return out;
+  }
+
+  /**
    * The line's demargined quote at (or nearest before) `atTs`: first valid
    * quote at/after the horizon, else the last valid quote before it (the line
    * died first). Empty-array ticks are line-death notices and are excluded.
