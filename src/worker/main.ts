@@ -161,7 +161,7 @@ async function main(): Promise<void> {
       res.end();
     }
   });
-  const healthPort = Number(process.env.WORKER_HEALTH_PORT ?? 8787);
+  const healthPort = Number(process.env.PORT ?? process.env.WORKER_HEALTH_PORT ?? 8787);
   health.listen(healthPort, () => log(`health endpoint on :${healthPort}/health`));
 
   const stopTimers = (): void => {

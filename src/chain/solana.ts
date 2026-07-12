@@ -10,6 +10,10 @@ import { config } from "../config.js";
 export const MEMO_PROGRAM_ID = new PublicKey(config.solana.memoProgramId);
 
 export function loadAgentKeypair(): Keypair {
+  // Hosted environments provide the key as an env var; locally it lives in
+  // .secrets/ (never committed either way).
+  const fromEnv = process.env.AGENT_KEYPAIR_JSON;
+  if (fromEnv) return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fromEnv)));
   return Keypair.fromSecretKey(
     Uint8Array.from(JSON.parse(readFileSync(config.solana.keypairPath, "utf8")))
   );

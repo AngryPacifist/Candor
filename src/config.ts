@@ -16,7 +16,7 @@ export const config = {
   solana: {
     rpcUrl: required("SOLANA_RPC_URL"),
     devnetRpcUrl: process.env.SOLANA_DEVNET_RPC_URL ?? "https://api.devnet.solana.com",
-    keypairPath: required("AGENT_KEYPAIR_PATH"),
+    keypairPath: process.env.AGENT_KEYPAIR_PATH ?? ".secrets/agent-keypair.json",
     programId: "9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA",
     memoProgramId: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
   },
