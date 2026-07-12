@@ -48,6 +48,22 @@ export function timeAgo(date: Date | string): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Kickoff formatting per the design system: "Jul 14 · 19:00" (UTC, deterministic). */
+export function fmtKickoff(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()} · ${hh}:${mm}`;
+}
+
+/** Feed competition strings -> display labels. */
+export function competitionLabel(competition: string): string {
+  if (competition === "Friendlies") return "Friendly";
+  return competition;
+}
+
 /** "OVERUNDER_PARTICIPANT_GOALS|half=1|line=1.5" + side -> human text. */
 export function humanMarket(marketKey: string, side: string, p1?: string, p2?: string): string {
   const [type, period, params] = marketKey.split("|");

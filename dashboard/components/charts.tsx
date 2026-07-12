@@ -1,15 +1,9 @@
-// Server-rendered SVG charts. One data series (the accent), settlement
-// markers with a surface ring, native <title> tooltips, recessive grid.
-// Bankroll steps ONLY at certified settlements; nothing is smoothed.
+// Fluid, server-rendered charts. The bankroll curve is an SVG step line with
+// non-scaling strokes plus HTML dot overlays (round at every width); the CLV
+// chart is pure HTML rows, fluid by construction. One data series (accent),
+// settlement markers ringed with the surface, native tooltips, nothing smoothed.
 
 import { STARTING_BANKROLL, type SettlementPoint } from "../lib/queries";
-
-const ACCENT = "var(--color-accent)";
-const POS = "var(--color-pos)";
-const GRID = "var(--color-border)";
-const SURFACE = "var(--color-panel)";
-const BAR = "var(--color-panel-3)";
-const BAR_EDGE = "var(--color-border-strong)";
 
 export function BankrollCurve({
   series,
@@ -28,7 +22,6 @@ export function BankrollCurve({
       </p>
     );
   }
-  const W = 620;
   const H = height;
   const PAD_TOP = 12;
   const PAD_BOTTOM = 14;
@@ -37,38 +30,40 @@ export function BankrollCurve({
   const max = Math.max(...values);
   const span = Math.max(max - min, 1);
   const y = (v: number) => PAD_TOP + (1 - (v - min) / span) * (H - PAD_TOP - PAD_BOTTOM);
-  const x = (i: number) => (i / values.length) * W;
+  const x = (i: number) => (i / values.length) * 100; // percent
 
-  // step path: hold each level, jump at the settlement
   let d = `M 0 ${y(values[0]!)}`;
   for (let i = 1; i < values.length; i++) {
     d += ` H ${x(i)} V ${y(values[i]!)}`;
   }
-  d += ` H ${W}`;
+  d += ` H 100`;
 
   return (
     <div>
-      <svg
-        width="100%"
-        height={H}
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={`Bankroll from ${STARTING_BANKROLL.toFixed(2)} to ${values[values.length - 1]!.toFixed(2)} units across ${points.length} settlements`}
-      >
-        <line x1="0" y1={y(min)} x2={W} y2={y(min)} stroke={GRID} strokeWidth="1" />
-        {max !== min ? (
-          <line x1="0" y1={y(max)} x2={W} y2={y(max)} stroke={GRID} strokeWidth="1" strokeDasharray="3 5" />
-        ) : null}
-        <path d={d} fill="none" stroke={ACCENT} strokeWidth="2" />
+      <div className="relative" style={{ height: H }}>
+        <svg
+          width="100%"
+          height={H}
+          viewBox={`0 0 100 ${H}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={`Bankroll from ${STARTING_BANKROLL.toFixed(2)} to ${values[values.length - 1]!.toFixed(2)} units across ${points.length} settlements`}
+        >
+          <line x1="0" y1={y(min)} x2="100" y2={y(min)} stroke="var(--color-border)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          {max !== min ? (
+            <line x1="0" y1={y(max)} x2="100" y2={y(max)} stroke="var(--color-border)" strokeWidth="1" strokeDasharray="3 5" vectorEffect="non-scaling-stroke" />
+          ) : null}
+          <path d={d} fill="none" stroke="var(--color-accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        </svg>
         {points.map((p, i) => (
-          <circle key={p.positionId} cx={x(i + 1)} cy={y(p.bankrollAfter!)} r="4" fill={POS} stroke={SURFACE} strokeWidth="2">
-            <title>
-              {`#${p.positionId} ${p.outcome} ${p.pnl >= 0 ? "+" : ""}${p.pnl.toFixed(2)}u — bankroll ${p.bankrollAfter!.toFixed(2)}`}
-            </title>
-          </circle>
+          <span
+            key={p.positionId}
+            className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-panel bg-pos"
+            style={{ left: `${x(i + 1)}%`, top: y(p.bankrollAfter!) }}
+            title={`#${p.positionId} ${p.outcome} ${p.pnl >= 0 ? "+" : ""}${p.pnl.toFixed(2)}u — bankroll ${p.bankrollAfter!.toFixed(2)}`}
+          />
         ))}
-      </svg>
+      </div>
       {caption ? (
         <p className="mt-3 text-[11.5px] leading-relaxed text-faint">
           Steps at settlements only: the bankroll moves when an outcome is certified, never
@@ -88,39 +83,54 @@ export function ClvBars({ series }: { series: SettlementPoint[] }) {
       </p>
     );
   }
-  const W = 620;
-  const ROW = 30;
-  const PAD_TOP = 8;
-  const H = PAD_TOP + points.length * ROW + 8;
   const maxAbs = Math.max(...points.map((p) => Math.abs(p.clv!)), 1);
-  const zeroX = W * 0.76;
-  const scale = (zeroX - 130) / maxAbs; // label gutter on the left
 
   return (
     <div>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Closing line value per position, ${points.length} positions`}>
-        <line x1={zeroX} y1={PAD_TOP - 2} x2={zeroX} y2={H - 6} stroke={BAR_EDGE} strokeWidth="1" />
-        <text x={zeroX + 8} y={PAD_TOP + 6} fill="var(--color-faint)" fontSize="10" fontFamily="var(--font-mono)">
-          0
-        </text>
-        {points.map((p, i) => {
-          const w = Math.max(Math.abs(p.clv!) * scale, 2);
-          const bx = p.clv! < 0 ? zeroX - w : zeroX;
-          const by = PAD_TOP + i * ROW + 4;
-          const labelX = p.clv! < 0 ? bx - 8 : bx + w + 8;
-          const anchor = p.clv! < 0 ? "end" : "start";
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        {points.map((p) => {
+          const pct = (Math.abs(p.clv!) / maxAbs) * 100;
+          const negative = p.clv! < 0;
           return (
-            <g key={p.positionId}>
-              <rect x={bx} y={by} width={w} height="16" rx="3" fill={BAR} stroke={BAR_EDGE} strokeWidth="1">
-                <title>{`#${p.positionId}: CLV ${p.clv! >= 0 ? "+" : ""}${p.clv!.toFixed(1)} pts (10 min horizon)`}</title>
-              </rect>
-              <text x={labelX} y={by + 12} fill="var(--color-muted)" fontSize="11" fontFamily="var(--font-mono)" textAnchor={anchor}>
-                {`#${p.positionId} · ${p.clv! >= 0 ? "+" : ""}${p.clv!.toFixed(1)}`}
-              </text>
-            </g>
+            <div
+              key={p.positionId}
+              className="grid grid-cols-[minmax(64px,auto)_minmax(0,1fr)] items-center gap-3"
+              title={`#${p.positionId}: CLV ${negative ? "" : "+"}${p.clv!.toFixed(1)} pts (10 min horizon)`}
+            >
+              <span className="text-right font-mono text-[11px] whitespace-nowrap text-muted tabular-nums">
+                #{p.positionId} &middot; {negative ? "" : "+"}
+                {p.clv!.toFixed(1)}
+              </span>
+              <div className="grid grid-cols-2">
+                {/* negative side grows leftward from the zero axis */}
+                <div className="flex justify-end border-r border-border-strong py-0.5">
+                  {negative ? (
+                    <span
+                      className="h-4 rounded-l-[3px] border border-r-0 border-border-strong bg-panel-3"
+                      style={{ width: `${pct}%` }}
+                    />
+                  ) : null}
+                </div>
+                <div className="flex justify-start py-0.5">
+                  {!negative ? (
+                    <span
+                      className="h-4 rounded-r-[3px] border border-l-0 border-border-strong bg-panel-3"
+                      style={{ width: `${pct}%` }}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </div>
           );
         })}
-      </svg>
+        <div className="grid grid-cols-[minmax(64px,auto)_minmax(0,1fr)] gap-3">
+          <span />
+          <div className="grid grid-cols-2 font-mono text-[10px] text-faint">
+            <span className="pr-1.5 text-right">&minus;{maxAbs.toFixed(0)}</span>
+            <span className="pl-1.5">0 &#8594; +{maxAbs.toFixed(0)} pts</span>
+          </div>
+        </div>
+      </div>
       <p className="mt-3 text-[11.5px] leading-relaxed text-faint">
         CLV is the skill metric, deliberately kept out of profit and loss colors. Bars grow
         from the record export; nothing is smoothed.

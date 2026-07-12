@@ -4,11 +4,11 @@ import { solscanTx, truncSig } from "../lib/format";
 export function Panel({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="rounded-lg border border-border bg-panel">
-      <header className="flex items-baseline justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold tracking-wide text-muted uppercase">{title}</h2>
-        {action}
+      <header className="flex items-baseline justify-between gap-4 border-b border-border px-[18px] py-[13px]">
+        <h2 className="text-xs font-semibold tracking-[0.07em] text-muted uppercase">{title}</h2>
+        {action ? <span className="whitespace-nowrap">{action}</span> : null}
       </header>
-      <div className="p-4">{children}</div>
+      <div className="px-[18px] py-4">{children}</div>
     </section>
   );
 }
@@ -16,10 +16,10 @@ export function Panel({ title, action, children }: { title: string; action?: Rea
 export function StatTile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "pos" | "neg" | "accent" }) {
   const toneClass = tone === "pos" ? "text-pos" : tone === "neg" ? "text-neg" : tone === "accent" ? "text-accent" : "text-foreground";
   return (
-    <div className="rounded-lg border border-border bg-panel px-4 py-3">
-      <p className="text-xs font-medium tracking-wide text-muted uppercase">{label}</p>
-      <p className={`mt-1 font-mono text-[19px] font-semibold tabular-nums md:text-2xl ${toneClass}`}>{value}</p>
-      {sub ? <p className="mt-0.5 text-xs text-faint">{sub}</p> : null}
+    <div className="rounded-lg border border-border bg-panel px-4 py-3.5">
+      <p className="text-[11px] font-medium tracking-[0.07em] text-muted uppercase">{label}</p>
+      <p className={`mt-1 font-mono text-[19px] font-medium tabular-nums md:text-2xl ${toneClass}`}>{value}</p>
+      {sub ? <p className="mt-0.5 text-[11.5px] text-faint">{sub}</p> : null}
     </div>
   );
 }

@@ -82,7 +82,7 @@ export function SignalFeed({ signals, roots }: { signals: SignalRow[]; roots: De
             return (
               <div
                 key={item.key}
-                className="grid grid-cols-[minmax(0,1fr)] gap-1 border-t border-border py-3.5 first:border-t-0 first:pt-1 md:grid-cols-[92px_minmax(0,1fr)] md:gap-4"
+                className="grid grid-cols-[minmax(0,1fr)] gap-1 border-t border-border py-[13px] first:border-t-0 first:pt-1 md:grid-cols-[92px_minmax(0,1fr)] md:gap-4"
               >
                 <span className="pt-0.5 font-mono text-[11px] leading-snug text-faint">
                   {w.day}
