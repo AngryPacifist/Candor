@@ -2,6 +2,7 @@
 .agents/
 resources/
 CLAUDE.md
+.claude/
 
 # Env / secrets / keypairs
 .env
