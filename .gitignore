@@ -24,3 +24,6 @@ node_modules/
 dist/
 *.tsbuildinfo
 npm-debug.log*
+
+# Design source kit (logo masters, brand docs) — shipped copies live in dashboard/public/brand
+branding/

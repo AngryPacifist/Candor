@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="100%" height="100%">
+  <!-- Background -->
+  <rect width="240" height="240" fill="#0a0c0e"/>
+
+  <!-- The Parallel Strokes -->
+  <rect x="72" y="28" width="38" height="184" fill="#54bdd8"/>
+  <rect x="130" y="28" width="38" height="184" fill="#54bdd8"/>
+
+  <!-- The Cut (Mask) -->
+  <line x1="28" y1="212" x2="212" y2="28" stroke="#0a0c0e" stroke-width="44" stroke-linecap="butt"/>
+
+  <!-- The Immutable Line -->
+  <line x1="32" y1="208" x2="208" y2="32" stroke="#54bdd8" stroke-width="26" stroke-linecap="butt"/>
+</svg>

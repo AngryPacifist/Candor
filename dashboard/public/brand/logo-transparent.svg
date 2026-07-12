@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="100%" height="100%">
+  <defs>
+    <mask id="cut-mask">
+      <!-- Start with everything visible -->
+      <rect width="240" height="240" fill="white"/>
+      <!-- Cut the 44px diagonal gap (black = hide) -->
+      <line x1="28" y1="212" x2="212" y2="28" stroke="black" stroke-width="44" stroke-linecap="butt"/>
+      <!-- Restore the 26px immutable line area (white = show) -->
+      <line x1="32" y1="208" x2="208" y2="32" stroke="white" stroke-width="26" stroke-linecap="butt"/>
+    </mask>
+  </defs>
+
+  <!-- The Parallel Strokes, masked to create the cut -->
+  <g mask="url(#cut-mask)">
+    <rect x="72" y="28" width="38" height="184" fill="#54bdd8"/>
+    <rect x="130" y="28" width="38" height="184" fill="#54bdd8"/>
+  </g>
+
+  <!-- The Immutable Line (drawn on top, no mask needed) -->
+  <line x1="32" y1="208" x2="208" y2="32" stroke="#54bdd8" stroke-width="26" stroke-linecap="butt"/>
+</svg>

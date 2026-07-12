@@ -10,18 +10,28 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://candor.up.railway.app"),
   title: "Candor",
   description: "The trading agent that cannot lie about its record.",
+  openGraph: {
+    title: "Candor",
+    description: "The trading agent that cannot lie about its record.",
+    url: "/",
+    siteName: "Candor",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Candor",
+    description: "The trading agent that cannot lie about its record.",
+  },
 };
 
 export const dynamic = "force-dynamic";
 
 function LogoGlyph() {
-  return (
-    <span aria-hidden className="relative inline-block h-[22px] w-[22px] rounded-[5px] border-[1.5px] border-accent">
-      <span className="absolute inset-[4px] translate-y-[-2px] rotate-[-45deg] scale-90 rounded-[1px] border-b-[1.5px] border-l-[1.5px] border-accent" />
-    </span>
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/logo-transparent.svg" alt="" width={24} height={24} aria-hidden />;
 }
 
 function AgentStatus({ heartbeatAt }: { heartbeatAt: string | null }) {
