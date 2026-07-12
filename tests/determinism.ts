@@ -10,7 +10,10 @@ import { simulateMatch } from "../src/replay/simulate.js";
 import { STRATEGY_PARAMS, STRATEGY_PARAMS_HASH } from "../src/strategy/params.js";
 import type { OddsRecord, ScoreRecord } from "../src/txline/types.js";
 
-const FIXTURES = [18218149, 18198205, 18213979];
+import { existsSync } from "node:fs";
+const FIXTURES = [18218149, 18198205, 18213979, 18222446].filter((id) =>
+  existsSync(`resources/replays/${id}.odds.jsonl`)
+);
 
 function simHash(fixtureId: number): string {
   const scoreRecords = readFileSync(`resources/replays/${fixtureId}.jsonl`, "utf8")
