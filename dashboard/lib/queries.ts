@@ -3,6 +3,7 @@ import { pool } from "./db";
 export interface PositionRow {
   id: number;
   opened_at: string;
+  decided_ts: string;
   fixture_id: string;
   participant1: string;
   participant2: string;
@@ -14,13 +15,24 @@ export interface PositionRow {
   model_prob: string;
   market_prob: string;
   stake_units: string;
+  bankroll_before: string;
+  entry_goals1: number;
+  entry_goals2: number;
   status: string;
   commit_sig: string | null;
+  prev_commit_sig: string | null;
   commit_status: string;
   payload_hash: string;
+  params_hash: string;
   outcome: string | null;
   pnl_units: string | null;
   clv: string | null;
+  settlement_evidence: {
+    finalisedSeq?: number;
+    regulation?: { full1: number; full2: number; half11: number; half12: number };
+    statBands?: Record<string, number[]>;
+    reason?: string;
+  } | null;
   proof_status: string | null;
   proof_result: boolean | null;
   proof_sig: string | null;
@@ -29,11 +41,12 @@ export interface PositionRow {
 
 export async function fetchPositions(limit = 200): Promise<PositionRow[]> {
   const res = await pool.query(
-    `SELECT p.id, p.opened_at, p.fixture_id, f.participant1, f.participant2,
+    `SELECT p.id, p.opened_at, p.decided_ts, p.fixture_id, f.participant1, f.participant2,
             p.market_key, p.scope, p.side, p.family, p.price_taken, p.model_prob,
-            p.market_prob, p.stake_units, p.status, p.commit_sig, p.commit_status,
-            p.payload_hash,
-            s.outcome, s.pnl_units, s.clv,
+            p.market_prob, p.stake_units, p.bankroll_before, p.entry_goals1, p.entry_goals2,
+            p.status, p.commit_sig, p.prev_commit_sig, p.commit_status,
+            p.payload_hash, p.params_hash,
+            s.outcome, s.pnl_units, s.clv, s.evidence AS settlement_evidence,
             pr.status AS proof_status, pr.result AS proof_result,
             pr.broadcast_sig AS proof_sig, pr.error AS proof_error
      FROM positions p
@@ -47,6 +60,98 @@ export async function fetchPositions(limit = 200): Promise<PositionRow[]> {
     [limit]
   );
   return res.rows;
+}
+
+/** The attestation strip: the chain state every page carries. */
+export interface Attest {
+  paramsHash: string | null;
+  frozen: boolean;
+  ceremonySig: string | null;
+  ceremonyHash: string | null;
+  chainTip: string | null;
+  settled: number;
+  proven: number;
+  heartbeatAt: string | null;
+}
+
+export async function fetchAttest(): Promise<Attest> {
+  const [state, counts] = await Promise.all([
+    pool.query(
+      `SELECT key, value, updated_at FROM agent_state
+       WHERE key IN ('params_freeze', 'last_commit_sig', 'worker_heartbeat')`
+    ),
+    pool.query(
+      `SELECT count(DISTINCT s.position_id)::int AS settled,
+              count(DISTINCT pr.position_id)::int AS proven
+       FROM settlements s
+       LEFT JOIN proofs pr ON pr.position_id = s.position_id AND pr.status = 'proven'`
+    ),
+  ]);
+  const a: Attest = {
+    paramsHash: null, frozen: false, ceremonySig: null, ceremonyHash: null,
+    chainTip: null, settled: counts.rows[0]?.settled ?? 0, proven: counts.rows[0]?.proven ?? 0,
+    heartbeatAt: null,
+  };
+  for (const row of state.rows) {
+    if (row.key === "params_freeze") {
+      a.frozen = true;
+      a.ceremonySig = row.value?.sig ?? null;
+      a.ceremonyHash = row.value?.hash ?? null;
+    }
+    if (row.key === "last_commit_sig") a.chainTip = row.value;
+    if (row.key === "worker_heartbeat") {
+      a.heartbeatAt = row.updated_at;
+      a.paramsHash = row.value?.paramsHash ?? null;
+    }
+  }
+  return a;
+}
+
+/** Settlement series for the bankroll curve and CLV bars (chronological). */
+export interface SettlementPoint {
+  positionId: number;
+  settledAt: string;
+  bankrollAfter: number | null;
+  pnl: number;
+  clv: number | null;
+  outcome: string;
+}
+
+export async function fetchSettlementSeries(): Promise<SettlementPoint[]> {
+  const res = await pool.query(
+    `SELECT s.position_id, s.settled_at, s.bankroll_after, s.pnl_units, s.clv, s.outcome
+     FROM settlements s ORDER BY s.settled_at, s.position_id`
+  );
+  return res.rows.map((r) => ({
+    positionId: Number(r.position_id),
+    settledAt: r.settled_at,
+    bankrollAfter: r.bankroll_after === null ? null : Number(r.bankroll_after),
+    pnl: Number(r.pnl_units),
+    clv: r.clv === null ? null : Number(r.clv),
+    outcome: r.outcome,
+  }));
+}
+
+/** Daily decisions-root commits, for the signal feed. */
+export interface DecisionsRoot {
+  date: string;
+  n: number;
+  root: string;
+  sig: string;
+  at: string;
+}
+
+export async function fetchDecisionsRoots(): Promise<DecisionsRoot[]> {
+  const res = await pool.query(
+    `SELECT key, value, updated_at FROM agent_state WHERE key LIKE 'decisions_root_%' ORDER BY key DESC`
+  );
+  return res.rows.map((r) => ({
+    date: String(r.key).replace("decisions_root_", ""),
+    n: Number(r.value?.n ?? 0),
+    root: String(r.value?.root ?? ""),
+    sig: String(r.value?.sig ?? ""),
+    at: r.updated_at,
+  }));
 }
 
 export interface SignalRow {
@@ -75,6 +180,9 @@ export async function fetchSignals(limit = 200): Promise<SignalRow[]> {
   return res.rows;
 }
 
+/** The paper bankroll every record starts from (locked decision 13; presentation only). */
+export const STARTING_BANKROLL = 1000;
+
 export interface Overview {
   bankroll: number | null;
   heartbeatAt: string | null;
@@ -88,11 +196,14 @@ export interface Overview {
   pnl: number;
   staked: number;
   clvMean: number | null;
-  upcoming: { fixture_id: string; participant1: string; participant2: string; start_time: string }[];
+  exposure: ExposureStats;
+  latest: PositionRow | null;
+  nextFixture: { participant1: string; participant2: string; competition: string; start_time: string } | null;
+  upcoming: { fixture_id: string; participant1: string; participant2: string; competition: string; start_time: string }[];
 }
 
 export async function fetchOverview(): Promise<Overview> {
-  const [state, agg, open, upcoming] = await Promise.all([
+  const [state, agg, open, upcoming, latest, posRes] = await Promise.all([
     pool.query(`SELECT key, value, updated_at FROM agent_state WHERE key IN ('bankroll_units','worker_heartbeat')`),
     pool.query(
       `SELECT count(*)::int AS settled,
@@ -106,9 +217,14 @@ export async function fetchOverview(): Promise<Overview> {
     ),
     fetchOpenPositions(),
     pool.query(
-      `SELECT fixture_id, participant1, participant2, start_time FROM fixtures
+      `SELECT fixture_id, participant1, participant2, competition, start_time FROM fixtures
        WHERE start_time > now() - interval '3 hours' AND competition <> ''
        ORDER BY start_time LIMIT 4`
+    ),
+    fetchPositions(1),
+    pool.query(
+      `SELECT p.stake_units, p.bankroll_before, p.opened_at, p.status, s.settled_at
+       FROM positions p LEFT JOIN settlements s ON s.position_id = p.id ORDER BY p.id`
     ),
   ]);
 
@@ -123,6 +239,7 @@ export async function fetchOverview(): Promise<Overview> {
     }
   }
   const a = agg.rows[0];
+  const upcomingRows = upcoming.rows;
   return {
     bankroll,
     heartbeatAt,
@@ -136,17 +253,21 @@ export async function fetchOverview(): Promise<Overview> {
     pnl: Number(a.pnl),
     staked: Number(a.staked),
     clvMean: a.clv_mean === null ? null : Number(a.clv_mean),
-    upcoming: upcoming.rows,
+    exposure: computeExposure(posRes.rows, bankroll),
+    latest: latest[0] ?? null,
+    nextFixture: upcomingRows.find((f) => new Date(f.start_time).getTime() > Date.now()) ?? null,
+    upcoming: upcomingRows,
   };
 }
 
 export async function fetchOpenPositions(): Promise<PositionRow[]> {
   const res = await pool.query(
-    `SELECT p.id, p.opened_at, p.fixture_id, f.participant1, f.participant2,
+    `SELECT p.id, p.opened_at, p.decided_ts, p.fixture_id, f.participant1, f.participant2,
             p.market_key, p.scope, p.side, p.family, p.price_taken, p.model_prob,
-            p.market_prob, p.stake_units, p.status, p.commit_sig, p.commit_status,
-            p.payload_hash,
-            NULL AS outcome, NULL AS pnl_units, NULL AS clv,
+            p.market_prob, p.stake_units, p.bankroll_before, p.entry_goals1, p.entry_goals2,
+            p.status, p.commit_sig, p.prev_commit_sig, p.commit_status,
+            p.payload_hash, p.params_hash,
+            NULL AS outcome, NULL AS pnl_units, NULL AS clv, NULL AS settlement_evidence,
             NULL AS proof_status, NULL AS proof_result, NULL AS proof_sig, NULL AS proof_error
      FROM positions p JOIN fixtures f ON f.fixture_id = p.fixture_id
      WHERE p.status = 'open' ORDER BY p.id DESC`

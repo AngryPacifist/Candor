@@ -18,22 +18,23 @@ export function StatTile({ label, value, sub, tone }: { label: string; value: st
   return (
     <div className="rounded-lg border border-border bg-panel px-4 py-3">
       <p className="text-xs font-medium tracking-wide text-muted uppercase">{label}</p>
-      <p className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</p>
+      <p className={`mt-1 font-mono text-[19px] font-semibold tabular-nums md:text-2xl ${toneClass}`}>{value}</p>
       {sub ? <p className="mt-0.5 text-xs text-faint">{sub}</p> : null}
     </div>
   );
 }
 
-export function Badge({ children, tone = "muted" }: { children: ReactNode; tone?: "pos" | "neg" | "warn" | "accent" | "muted" }) {
+export function Badge({ children, tone = "muted" }: { children: ReactNode; tone?: "pos" | "neg" | "warn" | "accent" | "muted" | "proof" }) {
   const tones: Record<string, string> = {
-    pos: "border-pos/40 text-pos",
-    neg: "border-neg/40 text-neg",
+    pos: "border-transparent bg-pos-dim text-pos",
+    neg: "border-transparent bg-neg-dim text-neg",
     warn: "border-warn/40 text-warn",
     accent: "border-accent/40 text-accent",
-    muted: "border-border text-muted",
+    muted: "border-transparent bg-panel-2 text-muted",
+    proof: "border-pos/40 text-pos",
   };
   return (
-    <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs font-medium ${tones[tone]}`}>
+    <span className={`inline-flex items-center gap-1 rounded-[5px] border px-2 py-0.5 text-[11px] font-medium ${tones[tone]}`}>
       {children}
     </span>
   );

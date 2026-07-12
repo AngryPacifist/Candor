@@ -3,6 +3,7 @@
 resources/
 CLAUDE.md
 .claude/
+.brand-preview/
 
 # Env / secrets / keypairs
 .env

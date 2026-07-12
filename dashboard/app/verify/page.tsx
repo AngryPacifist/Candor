@@ -1,122 +1,131 @@
-import { Panel, TxLink } from "../../components/ui";
-import { solscanAccount } from "../../lib/format";
-import { pool } from "../../lib/db";
+import { solscanAccount, solscanTx, truncSig } from "../../lib/format";
+import { fetchAttest } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
 
 const AGENT_WALLET = process.env.NEXT_PUBLIC_AGENT_WALLET ?? "DKdqzAhvYMB3TZFZSM7M6JA3nQqmsjk5W9Smo6vq7xrE";
 const ORACLE_PROGRAM = "9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA";
 
+function AffLine({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4 text-xs">
+      <span className="flex-none text-faint">{k}</span>
+      <span className="min-w-0 text-right font-mono text-[11.5px] break-all">{v}</span>
+    </div>
+  );
+}
+
+function Step({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h2 className="text-sm font-bold">
+        <span className="mr-2.5 font-mono text-accent">{n}</span>
+        {title}
+      </h2>
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)] gap-3">{children}</div>
+    </div>
+  );
+}
+
 export default async function VerifyPage() {
-  let paramsHash: string | null = null;
-  let freeze: { sig?: string; hash?: string } | null = null;
-  try {
-    const res = await pool.query(
-      `SELECT key, value FROM agent_state WHERE key IN ('worker_heartbeat', 'params_freeze')`
-    );
-    for (const row of res.rows) {
-      if (row.key === "worker_heartbeat") paramsHash = row.value?.paramsHash ?? null;
-      if (row.key === "params_freeze") freeze = row.value;
-    }
-  } catch {
-    paramsHash = null;
-  }
+  const attest = await fetchAttest();
 
   return (
-    <div className="flex max-w-prose flex-col gap-6">
-      <Panel title="How to verify this record">
-        <div className="flex flex-col gap-4 text-sm leading-relaxed text-muted">
-          <p className="text-foreground">
-            You do not have to trust this website. Everything it claims is either anchored on
-            Solana mainnet before the outcome existed, or recomputable from public data.
-          </p>
+    <div className="min-w-0 justify-self-center">
+      <div className="grid max-w-[68ch] grid-cols-[minmax(0,1fr)] gap-5">
+        <h1 className="text-base font-bold tracking-[-0.01em]">How to verify this record</h1>
+        <p className="text-[13.5px] leading-relaxed text-muted">
+          <strong className="font-medium text-foreground">You do not have to trust this website.</strong>{" "}
+          Everything it claims is either anchored on Solana mainnet before the outcome existed,
+          or recomputable from public data. This page is the complete procedure.
+        </p>
 
-          <h3 className="text-foreground font-semibold">1. The commit chain</h3>
-          <p>
-            The moment the agent takes a position, it broadcasts a memo transaction from{" "}
-            <a
-              href={solscanAccount(AGENT_WALLET)}
-              target="_blank"
-              rel="noreferrer"
-              className="font-mono text-accent underline underline-offset-2 break-all"
-            >
-              {AGENT_WALLET}
-            </a>
-            . The memo reads:
-          </p>
-          <pre className="overflow-x-auto rounded border border-border bg-panel-2 p-3 font-mono text-xs">
-            candor|v1|commit|&lt;sha256 of the position payload&gt;|params:&lt;strategy hash&gt;|prev:&lt;previous commit signature&gt;
-          </pre>
-          <p>
-            The chain timestamp proves the position existed before the outcome. The payload hash
-            binds the exact market, side, price, stake, and model probability: take{" "}
-            <code className="font-mono text-xs">payloadCanonical</code> from the record export
-            below, hash it with sha256, and it must equal the committed hash. The{" "}
-            <code className="font-mono text-xs">prev</code> field chains every commit to the one
-            before it, so a deleted losing position leaves a visible gap.
-          </p>
-
-          <h3 className="text-foreground font-semibold">2. The settlement proofs</h3>
-          <p>
-            Match truth is anchored on Solana by TxODDS as Merkle roots. At settlement, the
-            agent compiles each position&apos;s exact win condition into a{" "}
-            <code className="font-mono text-xs">validate_stat_v2</code> call on the oracle
-            program{" "}
-            <a
-              href={solscanAccount(ORACLE_PROGRAM)}
-              target="_blank"
-              rel="noreferrer"
-              className="font-mono text-accent underline underline-offset-2 break-all"
-            >
-              {ORACLE_PROGRAM}
-            </a>{" "}
-            and broadcasts it. The transaction certifies, against the root TxODDS committed,
-            whether the condition held. Wins and losses are proven the same way. If a proof
-            cannot be produced (for example, extra time makes the period split unverifiable),
-            the position is marked unavailable with the reason shown, never silently dropped.
-          </p>
-
-          <h3 className="text-foreground font-semibold">3. The frozen strategy</h3>
-          <p>
-            Every commit carries the hash of the complete strategy parameters
-            {paramsHash ? (
-              <>
-                {" "}
-                (currently <code className="font-mono text-xs">{paramsHash}</code>)
-              </>
-            ) : null}
-            . If we changed thresholds mid-run, the hashes in the chain would show it. The
-            parameter derivation, including its dead ends, is documented in the public
-            repository.
-          </p>
-          {freeze?.sig ? (
-            <p>
-              The freeze itself is anchored: before deployment, the full parameter hash
-              {freeze.hash ? (
+        <div className="grid gap-2.5 rounded-lg border border-border-strong bg-panel px-5 py-4">
+          <AffLine
+            k="agent wallet"
+            v={
+              <a href={solscanAccount(AGENT_WALLET)} target="_blank" rel="noreferrer" className="text-accent">
+                {AGENT_WALLET} &#8599;
+              </a>
+            }
+          />
+          <AffLine
+            k="oracle program"
+            v={
+              <a href={solscanAccount(ORACLE_PROGRAM)} target="_blank" rel="noreferrer" className="text-accent">
+                {ORACLE_PROGRAM} &#8599;
+              </a>
+            }
+          />
+          {attest.ceremonyHash ? <AffLine k="frozen params sha256" v={attest.ceremonyHash} /> : null}
+          {attest.ceremonySig ? (
+            <AffLine
+              k="freeze ceremony"
+              v={
                 <>
-                  {" "}
-                  (<code className="font-mono text-xs break-all">{freeze.hash}</code>)
+                  <a href={solscanTx(attest.ceremonySig)} target="_blank" rel="noreferrer" className="text-accent">
+                    {truncSig(attest.ceremonySig, 8)} &#8599;
+                  </a>{" "}
+                  &middot; committed before deployment
                 </>
-              ) : null}{" "}
-              was committed to mainnet as its own ceremony transaction:{" "}
-              <TxLink sig={freeze.sig} />. Every position committed since must carry that
-              hash, so the freeze has a public timestamp and the record after it is bound to
-              exactly those parameters.
-            </p>
+              }
+            />
           ) : null}
+        </div>
 
-          <h3 className="text-foreground font-semibold">4. The record export</h3>
-          <p>
-            <a href="/api/record" className="text-accent underline underline-offset-2">
+        <Step n="01" title="The commit chain">
+          <p className="text-[13.5px] leading-relaxed text-muted">
+            The moment a position opens, its canonical payload (fixture, market, side, price,
+            stake, model probability, timestamp) is hashed and broadcast in a memo transaction
+            from the agent wallet. The chain timestamp precedes the outcome. The{" "}
+            <code className="font-mono text-xs">prev</code> field chains every commit to the
+            one before it, so a deleted losing position leaves a visible hole.
+          </p>
+          <pre className="tablewrap rounded-md border border-border-strong bg-background px-3.5 py-3 font-mono text-[11.5px] whitespace-nowrap text-muted">
+            candor|v1|commit|&lt;payload sha256&gt;|params:&lt;strategy hash&gt;|prev:&lt;previous commit signature&gt;
+          </pre>
+          <p className="text-[13.5px] leading-relaxed text-muted">
+            Take <code className="font-mono text-xs">payloadCanonical</code> from the record
+            export, hash it with sha256 in any tool you like, and it must equal the committed
+            hash. The verify button on every position does exactly this, in your browser.
+          </p>
+        </Step>
+
+        <Step n="02" title="The settlement proofs">
+          <p className="text-[13.5px] leading-relaxed text-muted">
+            Match truth is anchored on Solana by TxODDS as Merkle roots. At settlement, each
+            position&apos;s exact win condition is compiled into a{" "}
+            <code className="font-mono text-xs">validate_stat_v2</code> call on the oracle
+            program and broadcast. The transaction certifies, against the root TxODDS
+            committed, whether the condition held. Wins and losses are proven identically. If
+            a proof cannot be produced, the position is marked unavailable with the reason
+            shown, never silently dropped.
+          </p>
+        </Step>
+
+        <Step n="03" title="The frozen strategy">
+          <p className="text-[13.5px] leading-relaxed text-muted">
+            Every commit carries the hash of the complete strategy parameters. The freeze
+            itself is anchored: the full hash was committed to mainnet as its own ceremony
+            transaction before deployment, so the parameters have a public timestamp and the
+            record after it is bound to exactly those values. If a threshold ever moved, the
+            chain would show the seam. The derivation, including its dead ends, is documented
+            in the public repository.
+          </p>
+        </Step>
+
+        <Step n="04" title="The record export">
+          <p className="text-[13.5px] leading-relaxed text-muted">
+            <a href="/api/record" className="font-mono text-xs text-accent underline underline-offset-2">
               /api/record
             </a>{" "}
-            returns the full machine-readable record: every position with its canonical payload,
-            hashes, commit and proof signatures, settlement evidence, and outcomes. Recompute
-            our P&L, Brier, and CLV yourself; you need nothing from us but this export and a
-            Solana RPC.
+            returns the full machine-readable record: every position with its canonical
+            payload, hashes, commit and proof signatures, settlement evidence, and the
+            complete signal log. Recompute the P&amp;L, the Brier score, and the CLV yourself;
+            you need nothing from us but this export and a Solana RPC.
           </p>
-        </div>
-      </Panel>
+        </Step>
+      </div>
     </div>
   );
 }
