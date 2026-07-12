@@ -30,7 +30,7 @@ const lt = (threshold: number): { threshold: number; comparison: Cmp } => ({ thr
 const eq = (threshold: number): { threshold: number; comparison: Cmp } => ({ threshold, comparison: { equalTo: {} } });
 
 export interface WinCondition {
-  statKeys: [number, number];
+  statKeys: number[];
   strategy: {
     geometricTargets: never[];
     distancePredicate: null;
@@ -168,31 +168,50 @@ export async function proveSettlement(
   if (!pos) return record({ status: "proof_unavailable", reason: "position/settlement not found" });
   if (!pos.finalised_seq) return record({ status: "proof_unavailable", reason: "fixture not finalised" });
 
-  // ET guard for full-scope claims (regulation != totals when ET happened)
+  // ET handling for full-scope claims: totals keys include extra-time goals,
+  // so the win condition cannot use them directly. Instead we certify the
+  // exact REGULATION COMPONENTS on-chain (bands verified live 2026-07-12:
+  // 1000=H1, 3000=H2, 4000=ET1, 7000=ET cumulative; regulation = 1000+3000)
+  // and the market outcome is public arithmetic over the certified values.
   const stats: Record<string, number> = pos.stats ?? {};
   const stat = (k: number) => stats[String(k)] ?? 0;
+  let condition: WinCondition | null = null;
   if (pos.scope !== "half1") {
     const etMarkers =
       stat(4001) + stat(4002) + stat(5001) + stat(5002) + stat(6001) + stat(6002) + stat(7001) + stat(7002);
     const totalsAgree = stat(1) === stat(1001) + stat(3001) && stat(2) === stat(1002) + stat(3002);
     if (etMarkers > 0 || !totalsAgree) {
-      return record({
-        status: "proof_unavailable",
-        reason: "extra time detected: full-match regulation split is not on-chain-provable until ET period-band semantics are verified",
-      });
+      const eqAt = (v: number) => ({ threshold: v, comparison: { equalTo: {} } });
+      condition = {
+        statKeys: [1001, 1002, 3001, 3002],
+        strategy: {
+          geometricTargets: [],
+          distancePredicate: null,
+          discretePredicates: [
+            { single: { index: 0, predicate: eqAt(stat(1001)) } },
+            { single: { index: 1, predicate: eqAt(stat(1002)) } },
+            { single: { index: 2, predicate: eqAt(stat(3001)) } },
+            { single: { index: 3, predicate: eqAt(stat(3002)) } },
+          ],
+        },
+        expected: true,
+        description: `ET match: regulation components certified exactly (H1 ${stat(1001)}-${stat(1002)}, H2 ${stat(3001)}-${stat(3002)}); the market outcome follows by public arithmetic`,
+      };
     }
   }
 
-  const built = buildWinCondition({
-    marketKey: pos.market_key,
-    scope: pos.scope,
-    side: pos.side,
-    entryGoals1: Number(pos.entry_goals1),
-    entryGoals2: Number(pos.entry_goals2),
-    outcome: pos.outcome,
-  });
-  if (!built.ok) return record({ status: "proof_unavailable", reason: built.reason });
-  const { condition } = built;
+  if (!condition) {
+    const built = buildWinCondition({
+      marketKey: pos.market_key,
+      scope: pos.scope,
+      side: pos.side,
+      entryGoals1: Number(pos.entry_goals1),
+      entryGoals2: Number(pos.entry_goals2),
+      outcome: pos.outcome,
+    });
+    if (!built.ok) return record({ status: "proof_unavailable", reason: built.reason });
+    condition = built.condition;
+  }
 
   try {
     const val = await client.statValidation(Number(pos.fixture_id), Number(pos.finalised_seq), condition.statKeys);
