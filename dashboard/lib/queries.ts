@@ -154,6 +154,15 @@ export async function fetchOpenPositions(): Promise<PositionRow[]> {
   return res.rows;
 }
 
+export interface ExposureStats {
+  openUnits: number;
+  openCount: number;
+  openPctOfBankroll: number | null;
+  peakUnits: number;
+  peakConcurrent: number;
+  largestStakePct: number | null;
+}
+
 export interface Metrics {
   settled: number;
   won: number;
@@ -166,17 +175,73 @@ export interface Metrics {
   clvPositiveShare: number | null;
   maxDrawdown: number;
   brier: { family: string; n: number; model: number; market: number }[];
+  exposure: ExposureStats;
+}
+
+/**
+ * Exposure measured from the position record: what is at risk now, the most
+ * that was ever at risk at once (interval sweep over open->settle windows),
+ * and the largest single stake relative to the bankroll it was sized on.
+ */
+function computeExposure(
+  positions: { stake_units: string; bankroll_before: string; opened_at: string; status: string; settled_at: string | null }[],
+  bankroll: number | null
+): ExposureStats {
+  let openUnits = 0;
+  let openCount = 0;
+  let largestStakePct: number | null = null;
+  const events: { t: number; delta: number }[] = [];
+  for (const p of positions) {
+    const stake = Number(p.stake_units);
+    const before = Number(p.bankroll_before);
+    if (before > 0) {
+      const pct = (stake / before) * 100;
+      if (largestStakePct === null || pct > largestStakePct) largestStakePct = pct;
+    }
+    if (p.status === "open") {
+      openUnits += stake;
+      openCount++;
+    }
+    events.push({ t: new Date(p.opened_at).getTime(), delta: stake });
+    if (p.settled_at) events.push({ t: new Date(p.settled_at).getTime(), delta: -stake });
+  }
+  // closes sort before opens at identical timestamps: touching windows do not overlap
+  events.sort((a, b) => a.t - b.t || a.delta - b.delta);
+  let units = 0, count = 0, peakUnits = 0, peakConcurrent = 0;
+  for (const e of events) {
+    units += e.delta;
+    count += e.delta > 0 ? 1 : -1;
+    if (units > peakUnits) peakUnits = units;
+    if (count > peakConcurrent) peakConcurrent = count;
+  }
+  return {
+    openUnits: Math.round(openUnits * 100) / 100,
+    openCount,
+    openPctOfBankroll: bankroll && bankroll > 0 ? (openUnits / bankroll) * 100 : null,
+    peakUnits: Math.round(peakUnits * 100) / 100,
+    peakConcurrent,
+    largestStakePct,
+  };
 }
 
 export async function fetchMetrics(): Promise<Metrics> {
-  const rows = (
-    await pool.query(
+  const [settledRes, posRes, bankRes] = await Promise.all([
+    pool.query(
       `SELECT p.family, p.market_key, p.model_prob, p.market_prob, p.stake_units,
               s.outcome, s.pnl_units, s.clv, s.bankroll_after
        FROM settlements s JOIN positions p ON p.id = s.position_id
        ORDER BY s.position_id`
-    )
-  ).rows;
+    ),
+    pool.query(
+      `SELECT p.stake_units, p.bankroll_before, p.opened_at, p.status, s.settled_at
+       FROM positions p LEFT JOIN settlements s ON s.position_id = p.id
+       ORDER BY p.id`
+    ),
+    pool.query(`SELECT value FROM agent_state WHERE key = 'bankroll_units'`),
+  ]);
+  const rows = settledRes.rows;
+  const bankroll = bankRes.rows[0] ? Number(bankRes.rows[0].value) : null;
+  const exposure = computeExposure(posRes.rows, bankroll);
   let won = 0, lost = 0, push = 0, staked = 0, pnl = 0, clvSum = 0, clvN = 0, clvPos = 0;
   let peak = -Infinity, maxDrawdown = 0;
   const fam = new Map<string, { n: number; model: number; market: number }>();
@@ -217,5 +282,6 @@ export async function fetchMetrics(): Promise<Metrics> {
       model: f.model / f.n,
       market: f.market / f.n,
     })),
+    exposure,
   };
 }

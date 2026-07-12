@@ -1,4 +1,4 @@
-import { Panel } from "../../components/ui";
+import { Panel, TxLink } from "../../components/ui";
 import { solscanAccount } from "../../lib/format";
 import { pool } from "../../lib/db";
 
@@ -9,9 +9,15 @@ const ORACLE_PROGRAM = "9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA";
 
 export default async function VerifyPage() {
   let paramsHash: string | null = null;
+  let freeze: { sig?: string; hash?: string } | null = null;
   try {
-    const res = await pool.query(`SELECT value FROM agent_state WHERE key = 'worker_heartbeat'`);
-    paramsHash = res.rows[0]?.value?.paramsHash ?? null;
+    const res = await pool.query(
+      `SELECT key, value FROM agent_state WHERE key IN ('worker_heartbeat', 'params_freeze')`
+    );
+    for (const row of res.rows) {
+      if (row.key === "worker_heartbeat") paramsHash = row.value?.paramsHash ?? null;
+      if (row.key === "params_freeze") freeze = row.value;
+    }
   } catch {
     paramsHash = null;
   }
@@ -83,6 +89,21 @@ export default async function VerifyPage() {
             parameter derivation, including its dead ends, is documented in the public
             repository.
           </p>
+          {freeze?.sig ? (
+            <p>
+              The freeze itself is anchored: before deployment, the full parameter hash
+              {freeze.hash ? (
+                <>
+                  {" "}
+                  (<code className="font-mono text-xs break-all">{freeze.hash}</code>)
+                </>
+              ) : null}{" "}
+              was committed to mainnet as its own ceremony transaction:{" "}
+              <TxLink sig={freeze.sig} />. Every position committed since must carry that
+              hash, so the freeze has a public timestamp and the record after it is bound to
+              exactly those parameters.
+            </p>
+          ) : null}
 
           <h3 className="text-foreground font-semibold">4. The record export</h3>
           <p>

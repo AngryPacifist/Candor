@@ -5,6 +5,16 @@ import { fetchMetrics } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
 
+function ExposureStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium tracking-wide text-muted uppercase">{label}</p>
+      <p className="mt-1 font-mono text-2xl font-semibold tabular-nums text-foreground">{value}</p>
+      {sub ? <p className="mt-0.5 text-xs text-faint">{sub}</p> : null}
+    </div>
+  );
+}
+
 export default async function MetricsPage() {
   const m = await fetchMetrics();
   return (
@@ -32,6 +42,32 @@ export default async function MetricsPage() {
         />
         <StatTile label="Max drawdown" value={fmtUnits(m.maxDrawdown)} sub="units from peak" />
       </div>
+
+      <Panel title="Exposure">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+          <ExposureStat
+            label="At risk now"
+            value={fmtUnits(m.exposure.openUnits)}
+            sub={
+              m.exposure.openPctOfBankroll === null
+                ? `${m.exposure.openCount} open`
+                : `${m.exposure.openCount} open · ${m.exposure.openPctOfBankroll.toFixed(1)}% of bankroll`
+            }
+          />
+          <ExposureStat label="Peak at risk" value={fmtUnits(m.exposure.peakUnits)} sub="most units staked at once" />
+          <ExposureStat label="Peak concurrent" value={String(m.exposure.peakConcurrent)} sub="positions open at once" />
+          <ExposureStat
+            label="Largest stake"
+            value={m.exposure.largestStakePct === null ? "–" : `${m.exposure.largestStakePct.toFixed(2)}%`}
+            sub="of bankroll at entry"
+          />
+        </div>
+        <p className="mt-4 border-t border-border pt-3 text-xs text-faint">
+          Measured from the position record itself. Stakes are capped fractional Kelly, and the
+          frozen parameter set enforces per-position, per-match, and concurrency limits; the
+          peak figures show the most the agent ever had at risk at one time.
+        </p>
+      </Panel>
 
       <Panel title="Calibration (Brier score, lower is better)">
         {m.brier.length === 0 ? (
