@@ -77,9 +77,21 @@ performed.
 - `sizing`: quarter Kelly, capped at 2% of bankroll per position, exposure limits in
   `params.ts`.
 
-## Freeze plan
+## The freeze (2026-07-12, pre-deploy)
 
-Two more full matches (the Jul 11-12 quarterfinals) are being recorded. The tuning pass will
-be re-run on all four recordings before deployment, any change to the values above will be
-recorded here with its reasoning, and the parameters freeze at deploy time (before the first
-semifinal). After that, the params hash in every on-chain commit proves they never moved.
+The re-run over all four recordings (both original tuning matches plus both live-traded
+quarterfinals, one of which went to extra time) confirmed the values unchanged:
+
+- At the frozen config (2.5 / 6.0 / 3.5): 3 entries across 4 matches, 2 won 1 lost, +9.2
+  units, and the simulation independently reproduces both entries the live agent actually
+  took, at the same lines and prices.
+- Lowering the AH bar to 5.0 admits exactly one additional trade, an AH movement entry, and
+  it loses. The elevated AH threshold is now supported by outcome data, not only by the
+  residual analysis.
+- Raising the base edge to 3.0 points silences the agent across all four matches, which the
+  noise floor does not justify.
+
+Frozen with zero changes; the params hash every live commit already carries is the frozen
+hash. The freeze was committed to mainnet as its own memo transaction (the ceremony tx
+linked from the dashboard), and the sample-size caveat stands: four matches confirm the
+calibration methodology, not profitability.
