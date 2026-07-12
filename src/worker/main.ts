@@ -27,7 +27,44 @@ function log(msg: string): void {
   console.log(`${new Date().toISOString()} [worker] ${msg}`);
 }
 
+process.on("uncaughtException", (e) => {
+  log(`FATAL uncaught: ${e.stack ?? e.message}`);
+  process.exit(1);
+});
+process.on("unhandledRejection", (e) => {
+  log(`FATAL unhandled rejection: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
+  process.exit(1);
+});
+
 async function main(): Promise<void> {
+  // Bind the health server FIRST: the platform's checker needs a port
+  // immediately, and a boot failure should be a labeled log line, not
+  // "service unavailable".
+  const state = { phase: "booting" as "booting" | "live", detail: () => ({}) as Record<string, unknown> };
+  const health = createServer((req, res) => {
+    if (req.url === "/health") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, phase: state.phase, ...state.detail() }));
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+  const healthPort = Number(process.env.PORT ?? process.env.WORKER_HEALTH_PORT ?? 8787);
+  health.listen(healthPort, () => log(`health endpoint on :${healthPort}/health (${state.phase})`));
+
+  // Wallet preflight with a clear error before any heavy boot work.
+  let agent;
+  try {
+    agent = loadAgentKeypair();
+  } catch (e) {
+    log(
+      `FATAL wallet unavailable: set AGENT_KEYPAIR_JSON to the keypair's JSON array (or provide the keypair file). ${e instanceof Error ? e.message : String(e)}`
+    );
+    process.exit(1);
+  }
+  log(`wallet: ${agent.publicKey.toBase58()}`);
+
   const client = new TxlineClient();
   const shutdown = new AbortController();
   const counters = { scores: 0, odds: 0, heartbeats: 0, disconnects: 0, foldErrors: 0, flushed: 0 };
@@ -36,7 +73,6 @@ async function main(): Promise<void> {
   log(`boot: ${known.size} fixtures known · params ${STRATEGY_PARAMS.version} hash=${STRATEGY_PARAMS_HASH.slice(0, 16)}`);
 
   const conn = mainnetConnection();
-  const agent = loadAgentKeypair();
   const engine = new AgentEngine({
     pool,
     client,
@@ -142,27 +178,15 @@ async function main(): Promise<void> {
       .catch((e2) => log(`heartbeat write failed: ${e2.message}`));
   }, STATUS_MS);
 
-  // Health endpoint for the hosting platform.
-  const health = createServer((req, res) => {
-    if (req.url === "/health") {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(
-        JSON.stringify({
-          ok: true,
-          counters,
-          agent: engine.counters,
-          paramsHash: STRATEGY_PARAMS_HASH.slice(0, 16),
-          walletLamports: lamports,
-          staleOpenPositions: staleOpen,
-        })
-      );
-    } else {
-      res.writeHead(404);
-      res.end();
-    }
+  // Boot complete: the health endpoint now reports live agent state.
+  state.phase = "live";
+  state.detail = () => ({
+    counters,
+    agent: engine.counters,
+    paramsHash: STRATEGY_PARAMS_HASH.slice(0, 16),
+    walletLamports: lamports,
+    staleOpenPositions: staleOpen,
   });
-  const healthPort = Number(process.env.PORT ?? process.env.WORKER_HEALTH_PORT ?? 8787);
-  health.listen(healthPort, () => log(`health endpoint on :${healthPort}/health`));
 
   const stopTimers = (): void => {
     clearInterval(fixtureSync);
