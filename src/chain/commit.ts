@@ -24,6 +24,11 @@ export type CommitResult =
   | { status: "skipped"; reason: string }
   | { status: "failed"; error: string };
 
+/** The exact memo bytes a position commit broadcasts. Pure so the replay dry-run can reproduce them. */
+export function buildCommitMemo(payloadHash: string, paramsHash: string, prev: string): string {
+  return `candor|v1|commit|${payloadHash}|params:${paramsHash.slice(0, 16)}|prev:${prev}`;
+}
+
 let chainLock: Promise<unknown> = Promise.resolve();
 
 /** Commit a position's payload hash to mainnet. Serialized across callers. */
@@ -55,7 +60,7 @@ async function doCommit(
   const prevRes = await pool.query(`SELECT value FROM agent_state WHERE key = $1`, [LAST_COMMIT_KEY]);
   const prev: string = prevRes.rows[0] ? JSON.parse(JSON.stringify(prevRes.rows[0].value)) : "genesis";
 
-  const memo = `candor|v1|commit|${row.payload_hash}|params:${String(row.params_hash).slice(0, 16)}|prev:${prev}`;
+  const memo = buildCommitMemo(row.payload_hash, String(row.params_hash), prev);
   const ix = new TransactionInstruction({
     keys: [{ pubkey: agent.publicKey, isSigner: true, isWritable: false }],
     programId: MEMO_PROGRAM_ID,

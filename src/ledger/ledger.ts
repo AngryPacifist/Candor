@@ -51,6 +51,40 @@ export interface SettledPosition {
   bankrollAfter: number;
 }
 
+/**
+ * The canonical position payload — the exact bytes whose sha256 goes on-chain.
+ * Pure so the replay dry-run produces byte-identical artifacts to production.
+ */
+export function buildPositionPayload(input: {
+  candidate: PositionCandidate;
+  scope: "full" | "half1";
+  stakeUnits: number;
+  entryGoals1: number;
+  entryGoals2: number;
+  bankrollBefore: number;
+}): { payload: { modelProb: number; marketProb: number }; payloadCanonical: string; payloadHash: string } {
+  const { candidate: c } = input;
+  const payload = {
+    schema: "candor.position.v1",
+    fixtureId: c.fixtureId,
+    marketKey: c.lineKey,
+    scope: input.scope,
+    side: c.side,
+    family: c.family,
+    priceTaken: c.price,
+    modelProb: Math.round(c.modelProb * 1e6) / 1e6,
+    marketProb: Math.round(c.marketProb * 1e6) / 1e6,
+    stakeUnits: input.stakeUnits,
+    bankrollBefore: input.bankrollBefore,
+    entryGoals1: input.entryGoals1,
+    entryGoals2: input.entryGoals2,
+    decidedTs: c.ts,
+    paramsHash: STRATEGY_PARAMS_HASH,
+  };
+  const payloadCanonical = canonicalJson(payload);
+  return { payload, payloadCanonical, payloadHash: sha256Hex(payloadCanonical) };
+}
+
 export class Ledger {
   constructor(private pool: pg.Pool) {}
 
@@ -101,25 +135,14 @@ export class Ledger {
   }): Promise<OpenedPosition> {
     const { candidate: c } = input;
     const bankroll = await this.getBankroll();
-    const payload = {
-      schema: "candor.position.v1",
-      fixtureId: c.fixtureId,
-      marketKey: c.lineKey,
+    const { payload, payloadCanonical, payloadHash } = buildPositionPayload({
+      candidate: c,
       scope: input.scope,
-      side: c.side,
-      family: c.family,
-      priceTaken: c.price,
-      modelProb: Math.round(c.modelProb * 1e6) / 1e6,
-      marketProb: Math.round(c.marketProb * 1e6) / 1e6,
       stakeUnits: input.stakeUnits,
-      bankrollBefore: bankroll,
       entryGoals1: input.entryGoals1,
       entryGoals2: input.entryGoals2,
-      decidedTs: c.ts,
-      paramsHash: STRATEGY_PARAMS_HASH,
-    };
-    const payloadCanonical = canonicalJson(payload);
-    const payloadHash = sha256Hex(payloadCanonical);
+      bankrollBefore: bankroll,
+    });
     const res = await this.pool.query(
       `INSERT INTO positions (fixture_id, market_key, scope, side, family, price_taken,
          model_prob, market_prob, stake_units, kelly_fraction, bankroll_before,
