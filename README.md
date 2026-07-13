@@ -35,8 +35,14 @@ is a protocol rather than a promise.
 by rule. Solana mainnet is the trust layer only; the agent never custodies funds and the
 TxL token is used for data access, never traded.
 
+> **Documentation:** the full five-chapter set lives in [`docs/`](docs/README.md) —
+> [trust layer](docs/trust-layer.md) · [how it trades](docs/how-candor-trades.md) ·
+> [parameter tuning](docs/params-tuning.md) · [TxLINE integration](docs/txline-integration.md) ·
+> [architecture](docs/architecture.md)
+
 ## Contents
 
+- [Documentation](docs/README.md)
 - [The honesty protocol](#the-honesty-protocol)
 - [Verify the record yourself](#verify-the-record-yourself)
 - [The strategy inside](#the-strategy-inside)

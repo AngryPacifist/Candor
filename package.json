@@ -9,7 +9,7 @@
     "migrate": "tsx src/db/migrate.ts",
     "worker": "tsx src/worker/main.ts"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "devDependencies": {
     "@solana/spl-token": "^0.4.15",
     "@types/bn.js": "^5.2.0",
