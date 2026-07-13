@@ -57,8 +57,10 @@ TxL token is used for data access, never traded.
 ## The honesty protocol
 
 Full specification with the exact byte formats, threat model, and live artifacts:
-[`docs/trust-layer.md`](docs/trust-layer.md). The short version: four mechanisms, all
-live on mainnet from the agent's own wallet
+[`docs/trust-layer.md`](docs/trust-layer.md). The construction is not specific to this
+agent (we call it the Candor protocol; any signal vendor or fund could run the same
+cycle). The short version: four mechanisms, all live on mainnet from the agent's own
+wallet
 ([`DKdqzAhvYMB3TZFZSM7M6JA3nQqmsjk5W9Smo6vq7xrE`](https://solscan.io/account/DKdqzAhvYMB3TZFZSM7M6JA3nQqmsjk5W9Smo6vq7xrE)).
 
 ### 1. Commit at decision time

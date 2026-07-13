@@ -20,8 +20,10 @@ are each closed by a separate on-chain mechanism:
 | Tune the strategy after the fact | the frozen-params hash in every commit, anchored by the freeze ceremony |
 | Curate the narrative | daily Merkle roots over the complete signal log, passes included |
 
-Everything below is implemented in [`src/chain/`](../src/chain/),
-[`src/ledger/ledger.ts`](../src/ledger/ledger.ts), and
+We call this construction **the Candor protocol**: it is not specific to this agent, and
+any signal vendor, fund, or trading desk could run the same commit, prove, freeze, and
+seal cycle to make its own performance claims verifiable. Everything below is implemented
+in [`src/chain/`](../src/chain/), [`src/ledger/ledger.ts`](../src/ledger/ledger.ts), and
 [`src/lib/canonical.ts`](../src/lib/canonical.ts).
 
 ## 0. Canonical serialization
