@@ -337,7 +337,9 @@ src/
 dashboard/    public read-only Next.js app: record, receipts, charts, verifier
 docs/         trust-layer.md · txline-integration.md · architecture.md ·
               how-candor-trades.md (the strategy) · params-tuning.md (the derivation)
-tests/        determinism suite (decisions + on-chain artifacts + grader parity)
+tests/        the verification bar: determinism suite, fair-price noise floor,
+              signal replay, settlement validation, on-chain proof validation
+              (requirements per test: tests/README.md)
 ```
 
 ## What Candor never does
