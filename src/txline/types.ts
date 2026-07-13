@@ -120,3 +120,29 @@ export interface StatValidationResponse {
   subTreeProof: { hash: unknown; isRightSibling: boolean }[];
   mainTreeProof: { hash: unknown; isRightSibling: boolean }[];
 }
+
+/**
+ * stat-validation-v3 response (Merkle multiproof; promoted to mainnet
+ * 2026-07-13, shape pinned by live probe the same day). Mainnet serves hashes
+ * as numeric byte arrays; devnet has served hex/base64 strings — parseHash
+ * normalizes all three. Per-leaf statProof arrived EMPTY on every observed
+ * case (the multiproof carries the paths) but is mapped defensively since the
+ * IDL's StatLeaf requires the field. multiproof.indices is passed through
+ * verbatim; its count can differ from the leaf count (observed 3 for 4).
+ */
+export interface StatValidationV3Response {
+  ts: number;
+  statsToProve: {
+    stat: { key: number; value: number; period: number };
+    statProof: { hash: unknown; isRightSibling: boolean }[];
+  }[];
+  eventStatRoot: unknown;
+  summary: {
+    fixtureId: number;
+    updateStats: { updateCount: number; minTimestamp: number; maxTimestamp: number };
+    eventStatsSubTreeRoot: unknown;
+  };
+  multiproof: { hashes: { hash: unknown; isRightSibling: boolean }[]; indices: number[] };
+  subTreeProof: { hash: unknown; isRightSibling: boolean }[];
+  mainTreeProof: { hash: unknown; isRightSibling: boolean }[];
+}

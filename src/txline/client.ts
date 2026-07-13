@@ -3,7 +3,7 @@
 // The guest JWT is re-issued via POST /auth/guest/start when missing or near expiry.
 
 import { config } from "../config.js";
-import type { Fixture, OddsRecord, ScoreRecord, StatValidationResponse } from "./types.js";
+import type { Fixture, OddsRecord, ScoreRecord, StatValidationResponse, StatValidationV3Response } from "./types.js";
 
 const JWT_REFRESH_MARGIN_MS = 24 * 60 * 60 * 1000; // re-issue when <1 day left
 
@@ -76,6 +76,13 @@ export class TxlineClient {
   statValidation(fixtureId: number, seq: number, statKeys: number[]): Promise<StatValidationResponse> {
     return this.getJson<StatValidationResponse>(
       `/api/scores/stat-validation?fixtureId=${fixtureId}&seq=${seq}&statKeys=${statKeys.join(",")}`
+    );
+  }
+
+  /** Multiproof validation payloads (mainnet since 2026-07-13). */
+  statValidationV3(fixtureId: number, seq: number, statKeys: number[]): Promise<StatValidationV3Response> {
+    return this.getJson<StatValidationV3Response>(
+      `/api/scores/stat-validation-v3?fixtureId=${fixtureId}&seq=${seq}&statKeys=${statKeys.join(",")}`
     );
   }
 

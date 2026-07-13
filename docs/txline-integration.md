@@ -34,7 +34,8 @@ auth.
 | `GET /api/fixtures/snapshot?epochDay=` | fixture discovery, every 10 minutes | Returns fixtures well beyond the documented 30-day window (harmless). Fields carry no round/stage metadata; `FixtureGroupId` is typed but undescribed (feedback item 14). New knockout fixtures appear automatically as TxODDS publishes them. |
 | `GET /api/scores/snapshot/{fixtureId}` | restart warmup; recorder seeding | Full record history for the fixture; replayed through the same fold as the stream. |
 | `GET /api/odds/snapshot/{fixtureId}` | restart warmup | Latest state per market line. |
-| `GET /api/scores/stat-validation?fixtureId=&seq=&statKeys=` | Merkle proof payloads for on-chain settlement proofs | `seq` must be the `game_finalised` sequence (sequences start at 1). 404s while the batch is still anchoring; see §5. |
+| `GET /api/scores/stat-validation-v3?fixtureId=&seq=&statKeys=` | Merkle **multiproof** payloads, the primary settlement-proof source since its 2026-07-13 mainnet promotion | Same query shape as V2; response carries `statsToProve[{stat, statProof}]` plus one shared `multiproof`. 404s while anchoring, like V2. |
+| `GET /api/scores/stat-validation?fixtureId=&seq=&statKeys=` | Merkle proof payloads for the `validate_stat_v2` fallback path | `seq` must be the `game_finalised` sequence (sequences start at 1). 404s while the batch is still anchoring; see §5. |
 | `POST /auth/guest/start` | JWT issue and re-issue | No credentials needed; the JWT alone is not data access. |
 
 ## 3. The two firehoses
@@ -90,9 +91,10 @@ the input Candor actually trades on. Two structural facts that shaped the strate
 
 ## 5. Validation payloads and the on-chain programs
 
-Settlement proofs consume `stat-validation` and feed `validate_stat_v2` on the oracle
-program `9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA`
-(details of what is proven: [`trust-layer.md`](trust-layer.md) §4).
+Settlement proofs consume `stat-validation-v3` (primary) or `stat-validation`
+(fallback) and feed `validate_stat_v3` / `validate_stat_v2` on the oracle program
+`9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA`
+(details of what is proven and the fallback rules: [`trust-layer.md`](trust-layer.md) §4).
 
 The payload anatomy, as consumed by [`src/chain/proof.ts`](../src/chain/proof.ts):
 
@@ -103,9 +105,9 @@ The payload anatomy, as consumed by [`src/chain/proof.ts`](../src/chain/proof.ts
 - `eventStatRoot` is shared at payload level; each requested stat arrives in
   `statsToProve[i]` with its own proof in `statProofs[i]`; `subTreeProof` and
   `mainTreeProof` complete the path to the daily root.
-- **Hashes arrive in mixed encodings** (numeric byte arrays on this endpoint; hex or
-  base64 strings on the V3 endpoint), so the parser normalizes all three defensively
-  (feedback item 13).
+- **Hashes arrive in mixed encodings** (numeric byte arrays observed on both mainnet
+  endpoints, V2 and V3 alike; TxODDS's own V3 example additionally defends against hex
+  and base64 strings), so the parser normalizes all three defensively (feedback item 13).
 - **Compute**: multi-leg validations need the full **1,400,000 CU** limit; the older
   400k guidance starves them. Signed memos need ~140k CU. `.view()` simulations fail
   with an unhelpful `AccountNotFound` when the fee payer holds zero lamports, so even
@@ -141,19 +143,29 @@ goal ticked `+4000` and `+7000` while `+3000` stayed frozen at the H2 value
 (feedback item 11). Anyone settling from the documented table silently corrupts every
 match where the halves differ.
 
-## 7. The V3 path, rehearsed and ready
+## 7. The V3 path: rehearsed, promoted, adopted
 
 TxODDS shipped `validate_stat_v3` (multiproof: shared `leaves`, `leafIndices`,
-`multiproofHashes`) mid-event, devnet-first; the mainnet endpoint 404s as of 2026-07-12,
-and TxODDS's own official mainnet samples use `validate_stat_v2` with exactly the
-conventions above, so Candor's production proof layer stays on V2.
+`multiproofHashes`) mid-event, devnet-first. Candor rehearsed the full flow end to end
+on devnet with the same agent wallet on July 12 (`scripts/v3-devnet-rehearsal.ts`, not
+shipped in the repo): free-tier `subscribe(1, 4)`, wallet-signed activation, the
+official reference case reproduced, our true case passing and false case rejected
+on-chain, and one real broadcast.
 
-The V3 flow was rehearsed end to end on devnet with the same agent wallet
-(`scripts/v3-devnet-rehearsal.ts`, not shipped in the repo): free-tier `subscribe(1, 4)`,
-wallet-signed activation, the official reference case reproduced, our true case passing
-and false case rejected on-chain, and one real broadcast. If TxODDS promotes V3 to
-mainnet, the payload mapping and the call pattern are already tested code, and the lift
-into the proof layer is small.
+On 2026-07-13 TxODDS promoted the endpoint to the mainnet cluster (announced on
+Discord; the docs still listed V2 only at the time). The same-day probe confirmed the
+endpoint serves under our existing token and the deployed program executes
+`validate_stat_v3`, then simulated every comparison × operator combination the
+win-condition compiler can emit — binary add/subtract with greater/less/equal, single
+`equalTo`, and the 4-leg extra-time component shape — through **both** methods, true
+and false directions, all agreeing. The proof layer adopted V3 as primary the same day,
+with V2 as the automatic fallback and the method recorded on every proof row.
+
+Shape notes from the mainnet probe: hashes arrive as numeric byte arrays; per-leaf
+`statProof` arrives empty (the multiproof carries the paths) but is mapped defensively;
+`multiproof.indices` can count fewer entries than the leaves (observed 3 for 4) and is
+passed through verbatim — the API and program are a matched pair and Candor never
+interprets the indices.
 
 ## 8. Findings, mapped
 

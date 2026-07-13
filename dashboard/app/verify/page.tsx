@@ -94,9 +94,12 @@ export default async function VerifyPage() {
         <Step n="02" title="The settlement proofs">
           <p className="text-[13.5px] leading-relaxed text-muted">
             Match truth is anchored on Solana by TxODDS as Merkle roots. At settlement, each
-            position&apos;s exact win condition is compiled into a{" "}
-            <code className="font-mono text-xs">validate_stat_v2</code> call on the oracle
-            program and broadcast. The transaction certifies, against the root TxODDS
+            position&apos;s exact win condition is compiled into a validation call on the
+            oracle program and broadcast:{" "}
+            <code className="font-mono text-xs">validate_stat_v3</code> multiproofs, with{" "}
+            <code className="font-mono text-xs">validate_stat_v2</code> as the automatic
+            fallback and for positions settled before 2026-07-13. Each receipt names the
+            method that proved it. The transaction certifies, against the root TxODDS
             committed, whether the condition held. Wins and losses are proven identically. If
             a proof cannot be produced, the position is marked unavailable with the reason
             shown, never silently dropped.

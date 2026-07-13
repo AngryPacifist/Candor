@@ -1,14 +1,25 @@
 // Prove-at-settlement: each settled position's exact market condition is
-// compiled to a validate_stat_v2 strategy and certified against TxODDS's
-// on-chain Merkle root — first as a free simulation (result must match our
+// compiled to an on-chain validation strategy and certified against TxODDS's
+// Merkle root — first as a free simulation (result must match our
 // settlement), then broadcast as a real transaction for permanence.
 //
-// Key choices (all empirically grounded, Session 1):
+// Method: validate_stat_v3 (Merkle multiproof) is primary since 2026-07-13,
+// the day TxODDS promoted it to the mainnet cluster (probed and adopted the
+// same day); validate_stat_v2 is the automatic fallback when the V3 leg
+// throws (endpoint / transport / program errors). A simulated verdict that
+// contradicts our settlement is TERMINAL and never falls back: both methods
+// read the same certified stats, so a mismatch is a truth problem, not a
+// transport problem. Every proof row records the method that produced it.
+// The strategy (win condition) is IDENTICAL across methods — only the API
+// endpoint and payload shape differ; every comparison × op combination the
+// compiler can emit was simulated through BOTH methods on mainnet before
+// adoption.
+//
+// Key choices (all empirically grounded, Sessions 1-3):
 // - Full-match (regulation) conditions use total-goal keys 1/2, valid when no
 //   extra time occurred (verified totals == H1 band + H2 band on both
-//   recordings). If ET markers are present, the proof degrades HONESTLY to
-//   proof_unavailable (the feed's ET period bands are unverified — docs table
-//   is wrong for the bands we could verify).
+//   recordings). If ET markers are present, the proof switches to the
+//   regulation-component path (bands verified live 2026-07-12).
 // - First-half conditions use the 1000 band (verified).
 // - AH conditions fold the committed entry score into the threshold:
 //   part1 covers iff (K1 - K2) > entry1 - entry2 - line.
@@ -18,6 +29,7 @@ import BN from "bn.js";
 import { ComputeBudgetProgram } from "@solana/web3.js";
 import type pg from "pg";
 import type { TxlineClient } from "../txline/client.js";
+import type { StatValidationResponse, StatValidationV3Response } from "../txline/types.js";
 import { splitMarketKey } from "../ledger/ledger.js";
 import { dailyScoresPda, loadAgentKeypair, mainnetConnection, mapProof, parseHash, txoracleProgram } from "./solana.js";
 
@@ -124,13 +136,65 @@ export function buildWinCondition(position: {
   return { ok: false, reason: `unknown market type ${type}` };
 }
 
+export type ProofMethod = "validate_stat_v3" | "validate_stat_v2";
+
 export type ProofOutcome =
-  | { status: "proven"; result: boolean; broadcastSig: string; statKeys: number[] }
+  | { status: "proven"; result: boolean; broadcastSig: string; statKeys: number[]; method: ProofMethod }
   | { status: "proof_unavailable"; reason: string };
+
+/** The head fields shared by both validation response shapes. */
+type ValidationHead = Pick<
+  StatValidationResponse,
+  "summary" | "eventStatRoot" | "subTreeProof" | "mainTreeProof"
+>;
+
+function payloadHead(val: ValidationHead) {
+  return {
+    ts: new BN(val.summary.updateStats.minTimestamp),
+    fixtureSummary: {
+      fixtureId: new BN(val.summary.fixtureId),
+      updateStats: {
+        updateCount: val.summary.updateStats.updateCount,
+        minTimestamp: new BN(val.summary.updateStats.minTimestamp),
+        maxTimestamp: new BN(val.summary.updateStats.maxTimestamp),
+      },
+      eventsSubTreeRoot: parseHash(val.summary.eventStatsSubTreeRoot),
+    },
+    fixtureProof: mapProof(val.subTreeProof as any),
+    mainTreeProof: mapProof(val.mainTreeProof as any),
+    eventStatRoot: parseHash(val.eventStatRoot),
+  };
+}
+
+/** The exact bytes sent to validate_stat_v2 (exported so tests share them). */
+export function buildV2Payload(val: StatValidationResponse) {
+  return {
+    ...payloadHead(val),
+    stats: val.statsToProve.map((s, i) => ({ stat: s, statProof: mapProof(val.statProofs[i] as any) })),
+  };
+}
+
+/**
+ * The exact bytes sent to validate_stat_v3 (exported so tests share them).
+ * `stat ?? l` mirrors TxODDS's own example: defensive against the leaf
+ * arriving flat instead of nested. multiproof fields pass through verbatim.
+ */
+export function buildV3Payload(val: StatValidationV3Response) {
+  return {
+    ...payloadHead(val),
+    leaves: val.statsToProve.map((l) => ({
+      stat: (l as { stat?: unknown }).stat ?? l,
+      statProof: mapProof(l.statProof as any),
+    })),
+    leafIndices: val.multiproof.indices,
+    multiproofHashes: mapProof(val.multiproof.hashes as any),
+  };
+}
 
 /**
  * Prove one settled position on mainnet and record it in the proofs table.
  * Simulation first (must agree with our settlement), then real broadcast.
+ * validate_stat_v3 first; validate_stat_v2 when the V3 leg throws.
  */
 export async function proveSettlement(
   pool: pg.Pool,
@@ -139,8 +203,8 @@ export async function proveSettlement(
 ): Promise<ProofOutcome> {
   const record = async (outcome: ProofOutcome, extra: Record<string, unknown> = {}) => {
     await pool.query(
-      `INSERT INTO proofs (position_id, status, stat_keys, target_ts, strategy, result, broadcast_sig, error)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      `INSERT INTO proofs (position_id, status, stat_keys, target_ts, strategy, result, broadcast_sig, error, method)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [
         positionId,
         outcome.status,
@@ -150,6 +214,7 @@ export async function proveSettlement(
         outcome.status === "proven" ? outcome.result : null,
         outcome.status === "proven" ? outcome.broadcastSig : null,
         outcome.status === "proven" ? null : outcome.reason,
+        outcome.status === "proven" ? outcome.method : ((extra.method as string | undefined) ?? null),
       ]
     );
     return outcome;
@@ -213,58 +278,79 @@ export async function proveSettlement(
     condition = built.condition;
   }
 
-  try {
-    const val = await client.statValidation(Number(pos.fixture_id), Number(pos.finalised_seq), condition.statKeys);
-    const targetTs = val.summary.updateStats.minTimestamp;
-    const payload = {
-      ts: new BN(targetTs),
-      fixtureSummary: {
-        fixtureId: new BN(val.summary.fixtureId),
-        updateStats: {
-          updateCount: val.summary.updateStats.updateCount,
-          minTimestamp: new BN(val.summary.updateStats.minTimestamp),
-          maxTimestamp: new BN(val.summary.updateStats.maxTimestamp),
-        },
-        eventsSubTreeRoot: parseHash(val.summary.eventStatsSubTreeRoot),
-      },
-      fixtureProof: mapProof(val.subTreeProof as any),
-      mainTreeProof: mapProof(val.mainTreeProof as any),
-      eventStatRoot: parseHash(val.eventStatRoot),
-      stats: val.statsToProve.map((s, i) => ({ stat: s, statProof: mapProof(val.statProofs[i] as any) })),
-    };
+  const conn = mainnetConnection();
+  const agent = loadAgentKeypair();
+  const { program } = txoracleProgram(conn, agent);
+  const cuLimit = ComputeBudgetProgram.setComputeUnitLimit({ units: VALIDATE_CU });
+  const cuPrice = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: CU_PRICE_MICROLAMPORTS });
 
-    const conn = mainnetConnection();
-    const agent = loadAgentKeypair();
-    const { program } = txoracleProgram(conn, agent);
+  // One leg: fetch the method's payload, simulate, then broadcast. Throws on
+  // transport/program errors (the caller falls back); a verdict is returned
+  // either way and judged by the caller.
+  const attempt = async (methodName: ProofMethod) => {
+    const fixtureId = Number(pos.fixture_id);
+    const seq = Number(pos.finalised_seq);
+    let payload: unknown;
+    let targetTs: number;
+    if (methodName === "validate_stat_v3") {
+      const val = await client.statValidationV3(fixtureId, seq, condition.statKeys);
+      targetTs = val.summary.updateStats.minTimestamp;
+      payload = buildV3Payload(val);
+    } else {
+      const val = await client.statValidation(fixtureId, seq, condition.statKeys);
+      targetTs = val.summary.updateStats.minTimestamp;
+      payload = buildV2Payload(val);
+    }
     const pda = dailyScoresPda(targetTs, program.programId);
-    const cuLimit = ComputeBudgetProgram.setComputeUnitLimit({ units: VALIDATE_CU });
-    const cuPrice = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: CU_PRICE_MICROLAMPORTS });
-
-    const method = () =>
-      (program.methods as any)
-        .validateStatV2(payload, condition.strategy)
+    const anchorMethod = methodName === "validate_stat_v3" ? "validateStatV3" : "validateStatV2";
+    const call = () =>
+      (program.methods as any)[anchorMethod](payload, condition.strategy)
         .accounts({ dailyScoresMerkleRoots: pda })
         .preInstructions([cuLimit, cuPrice]);
+    const simulated: boolean = await call().view();
+    if (simulated !== condition.expected) return { verdict: "mismatch" as const, simulated, targetTs };
+    const broadcastSig: string = await call().rpc();
+    return { verdict: "proven" as const, simulated, broadcastSig, targetTs };
+  };
 
-    const simulated: boolean = await method().view();
-    if (simulated !== condition.expected) {
+  const judge = (methodName: ProofMethod, r: Awaited<ReturnType<typeof attempt>>): Promise<ProofOutcome> => {
+    if (r.verdict === "mismatch") {
+      // Terminal, never falls back: both methods read the same certified
+      // stats, so a contradiction with our settlement is a truth problem.
       return record(
         {
           status: "proof_unavailable",
-          reason: `on-chain result ${simulated} does not match settlement expectation ${condition.expected} — investigate before trusting either`,
+          reason: `on-chain result ${r.simulated} does not match settlement expectation ${condition.expected} — investigate before trusting either`,
         },
-        { statKeys: condition.statKeys, targetTs, strategy: condition.strategy }
+        { statKeys: condition.statKeys, targetTs: r.targetTs, strategy: condition.strategy, method: methodName }
       );
     }
-    const broadcastSig: string = await method().rpc();
     return record(
-      { status: "proven", result: simulated, broadcastSig, statKeys: condition.statKeys },
-      { targetTs, strategy: condition.strategy }
+      { status: "proven", result: r.simulated, broadcastSig: r.broadcastSig, statKeys: condition.statKeys, method: methodName },
+      { targetTs: r.targetTs, strategy: condition.strategy }
     );
-  } catch (e) {
-    return record(
-      { status: "proof_unavailable", reason: e instanceof Error ? e.message.slice(0, 400) : String(e) },
-      { statKeys: condition.statKeys, strategy: condition.strategy }
-    );
+  };
+
+  // The fallback boundary wraps ONLY the on-chain attempts. Recording happens
+  // outside it, so a database failure propagates loudly (as it always did)
+  // instead of masquerading as a V3 transport error and double-broadcasting.
+  let legMethod: ProofMethod;
+  let legResult: Awaited<ReturnType<typeof attempt>>;
+  try {
+    legMethod = "validate_stat_v3";
+    legResult = await attempt("validate_stat_v3");
+  } catch (e3) {
+    const v3Msg = e3 instanceof Error ? e3.message : String(e3);
+    try {
+      legMethod = "validate_stat_v2";
+      legResult = await attempt("validate_stat_v2");
+    } catch (e2) {
+      const v2Msg = e2 instanceof Error ? e2.message : String(e2);
+      return record(
+        { status: "proof_unavailable", reason: `v3: ${v3Msg.slice(0, 190)} | v2: ${v2Msg.slice(0, 190)}` },
+        { statKeys: condition.statKeys, strategy: condition.strategy, method: "validate_stat_v2" }
+      );
+    }
   }
+  return judge(legMethod, legResult);
 }

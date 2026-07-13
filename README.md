@@ -21,7 +21,9 @@ and, this is the point, produces a track record that is **impossible to fake**:
 
 - Every position is hashed and **committed to Solana mainnet before its outcome exists**.
 - Every settled position is **proven on-chain** against the Merkle roots TxODDS anchors,
-  via the oracle program's `validate_stat_v2`. Wins and losses are proven identically.
+  via the oracle program's validation calls (`validate_stat_v3` multiproofs since their
+  2026-07-13 mainnet promotion, `validate_stat_v2` as the automatic fallback). Wins and
+  losses are proven identically.
 - Every number on the public dashboard carries a verify link or is recomputable from the
   machine-readable record export. You do not have to trust the website, the repo, or us.
 
@@ -90,10 +92,14 @@ kickoff, hours before the outcome existed:
 
 TxODDS anchors per-match statistics on Solana as Merkle roots. When a match finalises,
 Candor grades its positions from the certified period bands, then compiles **each
-position's exact win condition** into a `validate_stat_v2` call on the oracle program
+position's exact win condition** into a validation call on the oracle program
 ([`9ExbZjAapQww…`](https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA))
-and broadcasts it. The proof does not say "the score was 2 to 1"; it says **this
-position's claim evaluated true (or false) against the root TxODDS committed**:
+and broadcasts it: `validate_stat_v3` multiproofs, with `validate_stat_v2` as the
+automatic fallback (TxODDS promoted V3 to mainnet mid-tournament on 2026-07-13; Candor
+probed every predicate shape through both methods and adopted it the same day — each
+proof row records the method that certified it). The proof does not say "the score was
+2 to 1"; it says **this position's claim evaluated true (or false) against the root
+TxODDS committed**:
 
 | Market | Compiled predicate |
 |---|---|
@@ -153,8 +159,9 @@ You need nothing from us but a Solana RPC. The complete procedure lives at
 3. **Read the commit transaction** (`commit_sig`) on any explorer: the memo carries that
    hash, the frozen params hash, and the previous signature, at a block time before the
    match ended.
-4. **Read the proof transaction** (`proof_sig`): a `validate_stat_v2` call against TxODDS's
-   root returning the position's certified verdict.
+4. **Read the proof transaction** (`proof_sig`): a validation call against TxODDS's
+   root returning the position's certified verdict; `proof_method` names the
+   instruction (`validate_stat_v3` or `validate_stat_v2`).
 
 Or press **Verify** on any position at [candor.website/positions](https://candor.website/positions):
 your own browser recomputes the hash with WebCrypto and reads the commit transaction from
@@ -197,7 +204,7 @@ flowchart LR
     W[worker<br/>ingest · model · signals · ledger] --> DB[(Neon Postgres)]
     D[dashboard<br/>Next.js, read-only role] --> DB
   end
-  W -->|memo commits · validate_stat_v2 proofs · daily roots| SOL[Solana mainnet]
+  W -->|memo commits · validate_stat proofs · daily roots| SOL[Solana mainnet]
   D --- U[candor.website]
 ```
 
@@ -254,8 +261,9 @@ table: [`docs/txline-integration.md`](docs/txline-integration.md). Every surface
 | `GET /api/scores/stream` (SSE) | the scores firehose: phases, clock, per-period stat bands, `game_finalised` |
 | `GET /api/odds/stream` (SSE) | the StablePrice odds firehose: demargined consensus per line, pre-match and in-play |
 | `GET /api/scores/snapshot/{id}` + `GET /api/odds/snapshot/{id}` | restart-safe warmup re-seeds live state; the scores snapshot also seeds the match recorder |
-| `GET /api/scores/stat-validation` | settlement-grade Merkle proof payloads for `validate_stat_v2` |
-| `validate_stat_v2` (on-chain) | one call certifies a position's entire win condition against TxODDS's root (1.4M CU) |
+| `GET /api/scores/stat-validation-v3` | settlement-grade Merkle **multiproof** payloads for `validate_stat_v3` (primary since its 2026-07-13 mainnet promotion) |
+| `GET /api/scores/stat-validation` | proof payloads for the `validate_stat_v2` fallback path |
+| `validate_stat_v3` / `validate_stat_v2` (on-chain) | one call certifies a position's entire win condition against TxODDS's root (1.4M CU); V3 first, V2 on fallback, the method recorded per proof |
 | SPL Memo (on-chain) | position commits and daily decisions roots |
 
 Stream handling detail that mattered in production: both firehoses are deflate-encoded
@@ -264,9 +272,11 @@ backoff, dedupes scores by `(FixtureId, Id, Seq)` and odds by `MessageId`, and f
 as latest-value because VAR retractions genuinely roll bands back mid-match.
 
 The V3 validation path (`stat-validation-v3` + `validate_stat_v3` multiproofs) was
-rehearsed end to end on devnet with this same wallet, true and false cases and a real
-broadcast, so if TxODDS promotes it to mainnet the proof layer lifts over in a small,
-already-tested change.
+rehearsed end to end on devnet with this same wallet on July 12: true and false cases
+and a real broadcast. When TxODDS promoted it to mainnet the next day, the same-day
+probe re-verified every predicate shape the win-condition compiler can emit, in both
+directions and through both methods, and the proof layer adopted V3 as primary with
+`validate_stat_v2` as the automatic fallback.
 
 ## Empirical findings the build surfaced
 
@@ -330,7 +340,7 @@ src/
   model/      market parsing, the remaining-goals Poisson fair-price engine
   strategy/   frozen params (hashed), divergence + movement signals, Kelly sizing
   ledger/     paper ledger, exposure gates, settlement from certified period bands
-  chain/      memo commit chain, validate_stat_v2 proofs, daily decisions roots
+  chain/      memo commit chain, validate_stat proofs (V3 multiproof, V2 fallback), daily decisions roots
   replay/     deterministic replay of full recordings through the production stack
   worker/     bootstrap (health-first, named env validation) + the autonomy loop
   db/         schema (nine tables) + migration

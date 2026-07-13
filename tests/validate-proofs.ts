@@ -1,8 +1,11 @@
 // Commit/proof layer validation — REAL mainnet, end to end.
 // 1. Pure win-condition compilation checks (all market types, all outcomes).
-// 2. Simulated validate_stat_v2 for synthetic claims about the FINISHED Spain
-//    match (1X2 winner, OU over/under, AH with entry score) — free .view()s,
-//    every result asserted against the known final (2-1).
+// 2. Synthetic claims about the FINISHED Spain match, each simulated through
+//    BOTH oracle methods (validate_stat_v2 AND validate_stat_v3 multiproof —
+//    production runs V3-first with V2 fallback since 2026-07-13) using the
+//    production payload builders — free .view()s, every result asserted
+//    against the known final (2-1). The claim set covers every comparison × op
+//    combination the win-condition compiler can emit.
 // 3. Probe: is the 3000 band (true H2) servable by stat-validation?
 // 4. ONLY with --broadcast AND CANDOR_TEST_DATABASE_URL: the real pipeline on
 //    that database's latest settled position — memo COMMIT (hash-chained) then
@@ -13,12 +16,11 @@
 // agent wallet (even free .view() simulations need an existing fee payer).
 // Run: npx tsx tests/validate-proofs.ts [--broadcast]
 
-import BN from "bn.js";
 import { ComputeBudgetProgram } from "@solana/web3.js";
 import pg from "pg";
 import { commitPosition } from "../src/chain/commit.js";
-import { buildWinCondition, proveSettlement } from "../src/chain/proof.js";
-import { dailyScoresPda, loadAgentKeypair, mainnetConnection, mapProof, parseHash, txoracleProgram } from "../src/chain/solana.js";
+import { buildV2Payload, buildV3Payload, buildWinCondition, proveSettlement } from "../src/chain/proof.js";
+import { dailyScoresPda, loadAgentKeypair, mainnetConnection, txoracleProgram } from "../src/chain/solana.js";
 import { TxlineClient } from "../src/txline/client.js";
 
 let failures = 0;
@@ -47,7 +49,7 @@ function conditionChecks(): void {
 }
 
 async function syntheticSpainProofs(client: TxlineClient): Promise<void> {
-  console.log("— synthetic claims vs the real Spain final (2-1), mainnet simulations —");
+  console.log("— synthetic claims vs the real Spain final (2-1), mainnet simulations, BOTH methods —");
   const FIXTURE = 18218149;
   const SEQ = 1087;
   const conn = mainnetConnection();
@@ -55,11 +57,15 @@ async function syntheticSpainProofs(client: TxlineClient): Promise<void> {
   const { program } = txoracleProgram(conn, agent);
   const cu = ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 });
 
+  // Together these cover every comparison × op combination the compiler emits:
+  // subtract gt/lt/eq, add gt/lt/eq, plus the half-scope 1000-band keys.
   const claims: { name: string; pos: Parameters<typeof buildWinCondition>[0]; expectOnChain: boolean }[] = [
     { name: "1X2 part1 (Spain won)", pos: { marketKey: "1X2_PARTICIPANT_RESULT||", scope: "full", side: "part1", entryGoals1: 0, entryGoals2: 0, outcome: "won" }, expectOnChain: true },
+    { name: "1X2 part2 (the opponent lost)", pos: { marketKey: "1X2_PARTICIPANT_RESULT||", scope: "full", side: "part2", entryGoals1: 0, entryGoals2: 0, outcome: "lost" }, expectOnChain: false },
     { name: "1X2 draw (it wasn't)", pos: { marketKey: "1X2_PARTICIPANT_RESULT||", scope: "full", side: "draw", entryGoals1: 0, entryGoals2: 0, outcome: "lost" }, expectOnChain: false },
     { name: "OU over 2.5 (3 goals)", pos: { marketKey: "OVERUNDER_PARTICIPANT_GOALS||line=2.5", scope: "full", side: "over", entryGoals1: 0, entryGoals2: 0, outcome: "won" }, expectOnChain: true },
     { name: "OU under 2.5 (lost)", pos: { marketKey: "OVERUNDER_PARTICIPANT_GOALS||line=2.5", scope: "full", side: "under", entryGoals1: 0, entryGoals2: 0, outcome: "lost" }, expectOnChain: false },
+    { name: "OU line=3 push (total exactly 3)", pos: { marketKey: "OVERUNDER_PARTICIPANT_GOALS||line=3", scope: "full", side: "over", entryGoals1: 0, entryGoals2: 0, outcome: "push" }, expectOnChain: true },
     { name: "AH part1 -0.5 pre-match (margin 1 > 0.5... c=-0.5, K=1 > -0.5? yes)", pos: { marketKey: "ASIANHANDICAP_PARTICIPANT_GOALS||line=-0.5", scope: "full", side: "part1", entryGoals1: 0, entryGoals2: 0, outcome: "won" }, expectOnChain: true },
     { name: "AH part1 -0.5 from 1-1 (H2 margin 1-0 covers)", pos: { marketKey: "ASIANHANDICAP_PARTICIPANT_GOALS||line=-0.5", scope: "full", side: "part1", entryGoals1: 1, entryGoals2: 1, outcome: "won" }, expectOnChain: true },
     { name: "H1 OU over 1.5 (H1 1-1 = 2 goals)", pos: { marketKey: "OVERUNDER_PARTICIPANT_GOALS|half=1|line=1.5", scope: "half1", side: "over", entryGoals1: 0, entryGoals2: 0, outcome: "won" }, expectOnChain: true },
@@ -71,33 +77,27 @@ async function syntheticSpainProofs(client: TxlineClient): Promise<void> {
       check(claim.name, false, built.reason);
       continue;
     }
-    try {
-      const val = await client.statValidation(FIXTURE, SEQ, built.condition.statKeys);
-      const targetTs = val.summary.updateStats.minTimestamp;
-      const payload = {
-        ts: new BN(targetTs),
-        fixtureSummary: {
-          fixtureId: new BN(val.summary.fixtureId),
-          updateStats: {
-            updateCount: val.summary.updateStats.updateCount,
-            minTimestamp: new BN(val.summary.updateStats.minTimestamp),
-            maxTimestamp: new BN(val.summary.updateStats.maxTimestamp),
-          },
-          eventsSubTreeRoot: parseHash(val.summary.eventStatsSubTreeRoot),
-        },
-        fixtureProof: mapProof(val.subTreeProof as any),
-        mainTreeProof: mapProof(val.mainTreeProof as any),
-        eventStatRoot: parseHash(val.eventStatRoot),
-        stats: val.statsToProve.map((s, i) => ({ stat: s, statProof: mapProof(val.statProofs[i] as any) })),
-      };
-      const result: boolean = await (program.methods as any)
-        .validateStatV2(payload, built.condition.strategy)
-        .accounts({ dailyScoresMerkleRoots: dailyScoresPda(targetTs, program.programId) })
-        .preInstructions([cu])
-        .view();
-      check(claim.name, result === claim.expectOnChain, `on-chain says ${result} (${built.condition.description})`);
-    } catch (e) {
-      check(claim.name, false, e instanceof Error ? e.message.slice(0, 160) : String(e));
+    for (const method of ["validateStatV2", "validateStatV3"] as const) {
+      try {
+        let payload: unknown;
+        let targetTs: number;
+        if (method === "validateStatV3") {
+          const val = await client.statValidationV3(FIXTURE, SEQ, built.condition.statKeys);
+          targetTs = val.summary.updateStats.minTimestamp;
+          payload = buildV3Payload(val);
+        } else {
+          const val = await client.statValidation(FIXTURE, SEQ, built.condition.statKeys);
+          targetTs = val.summary.updateStats.minTimestamp;
+          payload = buildV2Payload(val);
+        }
+        const result: boolean = await (program.methods as any)[method](payload, built.condition.strategy)
+          .accounts({ dailyScoresMerkleRoots: dailyScoresPda(targetTs, program.programId) })
+          .preInstructions([cu])
+          .view();
+        check(`${claim.name} [${method}]`, result === claim.expectOnChain, `on-chain says ${result} (${built.condition.description})`);
+      } catch (e) {
+        check(`${claim.name} [${method}]`, false, e instanceof Error ? e.message.slice(0, 160) : String(e));
+      }
     }
   }
 }
@@ -139,7 +139,7 @@ async function realPipeline(pool: pg.Pool, client: TxlineClient): Promise<void> 
     `prove position ${positionId}`,
     proof.status === "proven",
     proof.status === "proven"
-      ? `result=${proof.result} keys=${proof.statKeys} sig ${proof.broadcastSig.slice(0, 20)}...`
+      ? `result=${proof.result} via ${proof.method} keys=${proof.statKeys} sig ${proof.broadcastSig.slice(0, 20)}...`
       : proof.reason
   );
   if (proof.status === "proven") {

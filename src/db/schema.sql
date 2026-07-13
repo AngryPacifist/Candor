@@ -150,3 +150,9 @@ ALTER TABLE positions DROP COLUMN IF EXISTS model_price;
 ALTER TABLE positions ALTER COLUMN prev_commit_sig DROP NOT NULL;
 ALTER TABLE settlements ADD COLUMN IF NOT EXISTS bankroll_after NUMERIC;
 ALTER TABLE settlements ADD COLUMN IF NOT EXISTS closing_prob NUMERIC;
+-- validate_stat_v3 adoption (2026-07-13): which oracle method produced each
+-- proof row (validate_stat_v3 | validate_stat_v2; NULL on void rows).
+ALTER TABLE proofs ADD COLUMN IF NOT EXISTS method TEXT;
+-- Backfill rows proven before the column existed (all were validate_stat_v2;
+-- post-adoption code always writes the method, so this cannot mislabel new rows).
+UPDATE proofs SET method = 'validate_stat_v2' WHERE method IS NULL AND status = 'proven';

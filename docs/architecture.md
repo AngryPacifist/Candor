@@ -18,7 +18,7 @@ TxLINE mainnet (scores SSE + odds SSE + REST)
 └──────────────────────────────┘        └─────────────────────────────┘
         │
         ▼
-Solana mainnet (SPL Memo commits + roots · txoracle validate_stat_v2)
+Solana mainnet (SPL Memo commits + roots · txoracle validate_stat proofs)
 ```
 
 Three invariants the deployment enforces:
@@ -130,7 +130,7 @@ zero open positions and do nothing), which was exercised on the first cloud depl
 | `signals` | every decision, `enter` and `pass`, with reason and model inputs | leaves of the daily Merkle root |
 | `positions` | the ledger: entry facts + `payload_canonical`, `payload_hash`, `params_hash`, commit chain fields | `commit_status`: pending / committed / failed |
 | `settlements` | outcome, P&L, `bankroll_after`, CLV at the frozen horizon, evidence JSON | bankroll moves only here |
-| `proofs` | every proof attempt: status, stat keys, strategy JSON, result, signature or error | full history kept; latest row is the position's proof state |
+| `proofs` | every proof attempt: status, oracle method, stat keys, strategy JSON, result, signature or error | full history kept; latest row is the position's proof state |
 | `agent_state` | key-value: bankroll, chain tips, freeze record, daily roots, heartbeat | the attestation strip reads this |
 
 ## 4. The dashboard
@@ -186,7 +186,8 @@ user-facing test.
 | Stream drop | reconnect with capped backoff; at-least-once + dedupe | `disconnects` counter in the heartbeat |
 | Commit broadcast fails | position marked `failed`, retried every 2m | `commit failed` badge until it lands |
 | Proof 404 (anchoring lag) | retried every 5m for 24h | `proof unavailable` then `proven (retry)` |
-| Simulated proof ≠ settlement | broadcast blocked | `proof_unavailable` with the mismatch reason |
+| V3 endpoint or program fails | automatic fallback to `validate_stat_v2` in the same attempt | `proofs.method` names what proved it |
+| Simulated proof ≠ settlement | broadcast blocked, no fallback (a contradiction is a truth problem, not transport) | `proof_unavailable` with the mismatch reason |
 | Match abandoned/cancelled | stakes returned | `void` outcome + terminal proof state |
 | Extra time on a full-match market | regulation components certified instead | proof row with the 4-leg strategy |
 | Coverage dies mid-match | stale-open alarm | heartbeat `staleOpenPositions` > 0 |

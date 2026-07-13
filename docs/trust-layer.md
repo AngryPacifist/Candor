@@ -16,7 +16,7 @@ are each closed by a separate on-chain mechanism:
 |---|---|
 | Backdate a pick | commit-at-decision: the payload hash is on mainnet before the outcome exists |
 | Delete a loser | the hash chain: every commit names its predecessor, so a gap is visible |
-| Misreport an outcome | settlement proofs: `validate_stat_v2` certifies the win condition against TxODDS's root |
+| Misreport an outcome | settlement proofs: the oracle's validate_stat calls certify the win condition against TxODDS's root |
 | Tune the strategy after the fact | the frozen-params hash in every commit, anchored by the freeze ceremony |
 | Curate the narrative | daily Merkle roots over the complete signal log, passes included |
 
@@ -159,7 +159,8 @@ Bankroll moves only here: stakes are exposure, never spend, and every settlement
 [`src/chain/proof.ts`](../src/chain/proof.ts) turns each settled position into an
 on-chain certification. The design decision that makes the proofs meaningful: the program
 is not asked "what was the score"; it is asked **the position's exact win condition**,
-compiled into a `validate_stat_v2` strategy:
+compiled into a validation strategy (the same strategy object serves both oracle
+methods):
 
 | Market | Stat keys | Compiled predicate |
 |---|---|---|
@@ -188,9 +189,21 @@ the settlement or the claim is wrong and neither deserves a certificate. Only on
 agreement is the real transaction sent (1,400,000 compute units, the measured requirement
 for multi-leg validations).
 
+**The method: `validate_stat_v3` multiproofs since 2026-07-13, `validate_stat_v2` as
+the automatic fallback.** TxODDS promoted the V3 endpoint to the mainnet cluster
+mid-tournament. Candor had rehearsed the full V3 flow on devnet the day before, probed
+the promotion the same morning — every comparison and operator combination the compiler
+can emit, simulated true and false through both methods, all agreeing — and adopted it
+the same day. A thrown error in the V3 leg (endpoint, transport, program) falls back to
+V2 within the same attempt; a simulated verdict that contradicts our settlement is
+terminal and never falls back, because both methods read the same certified stats and a
+contradiction is a truth problem, not a transport problem. Positions settled before the
+adoption are V2-proven, and every proof row records the method that produced it.
+
 **Every proof attempt is a row.** The `proofs` table keeps the full attempt history:
-status (`proven` / `proof_unavailable`), the stat keys, the target timestamp, the exact
-strategy JSON sent on-chain, the on-chain result, the broadcast signature, or the error.
+status (`proven` / `proof_unavailable`), the oracle method, the stat keys, the target
+timestamp, the exact strategy JSON sent on-chain, the on-chain result, the broadcast
+signature, or the error.
 The dashboard shows the latest state; the export shows it with the strategy.
 
 **The anchoring lag is handled by retry, visibly.** TxODDS anchors score batches in

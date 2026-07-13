@@ -36,6 +36,7 @@ export interface PositionRow {
   proof_status: string | null;
   proof_result: boolean | null;
   proof_sig: string | null;
+  proof_method: string | null;
   proof_error: string | null;
 }
 
@@ -48,12 +49,12 @@ export async function fetchPositions(limit = 200): Promise<PositionRow[]> {
             p.payload_hash, p.params_hash,
             s.outcome, s.pnl_units, s.clv, s.evidence AS settlement_evidence,
             pr.status AS proof_status, pr.result AS proof_result,
-            pr.broadcast_sig AS proof_sig, pr.error AS proof_error
+            pr.broadcast_sig AS proof_sig, pr.method AS proof_method, pr.error AS proof_error
      FROM positions p
      JOIN fixtures f ON f.fixture_id = p.fixture_id
      LEFT JOIN settlements s ON s.position_id = p.id
      LEFT JOIN LATERAL (
-       SELECT status, result, broadcast_sig, error FROM proofs
+       SELECT status, result, broadcast_sig, method, error FROM proofs
        WHERE position_id = p.id ORDER BY id DESC LIMIT 1
      ) pr ON true
      ORDER BY p.id DESC LIMIT $1`,
@@ -268,7 +269,8 @@ export async function fetchOpenPositions(): Promise<PositionRow[]> {
             p.status, p.commit_sig, p.prev_commit_sig, p.commit_status,
             p.payload_hash, p.params_hash,
             NULL AS outcome, NULL AS pnl_units, NULL AS clv, NULL AS settlement_evidence,
-            NULL AS proof_status, NULL AS proof_result, NULL AS proof_sig, NULL AS proof_error
+            NULL AS proof_status, NULL AS proof_result, NULL AS proof_sig,
+            NULL AS proof_method, NULL AS proof_error
      FROM positions p JOIN fixtures f ON f.fixture_id = p.fixture_id
      WHERE p.status = 'open' ORDER BY p.id DESC`
   );

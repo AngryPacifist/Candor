@@ -287,7 +287,7 @@ export class AgentEngine {
       const proof = await proveSettlement(this.deps.pool, this.deps.client, Number(row.position_id));
       if (proof.status === "proven") {
         this.counters.proofs++;
-        this.deps.log(`PROVEN (retry) position ${row.position_id}: result=${proof.result} tx ${proof.broadcastSig}`);
+        this.deps.log(`PROVEN (retry) position ${row.position_id} via ${proof.method}: result=${proof.result} tx ${proof.broadcastSig}`);
       }
       await new Promise((r) => setTimeout(r, 2_000));
     }
@@ -322,7 +322,7 @@ export class AgentEngine {
       const proof = await proveSettlement(this.deps.pool, this.deps.client, s.positionId);
       if (proof.status === "proven") {
         this.counters.proofs++;
-        this.deps.log(`PROVEN position ${s.positionId}: result=${proof.result} tx ${proof.broadcastSig}`);
+        this.deps.log(`PROVEN position ${s.positionId} via ${proof.method}: result=${proof.result} tx ${proof.broadcastSig}`);
       } else {
         this.counters.proofUnavailable++;
         this.deps.log(`proof unavailable for position ${s.positionId}: ${proof.reason}`);

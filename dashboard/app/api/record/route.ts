@@ -18,12 +18,12 @@ export async function GET() {
               s.evidence AS settlement_evidence,
               pr.status AS proof_status, pr.result AS proof_result,
               pr.broadcast_sig AS proof_sig, pr.stat_keys AS proof_stat_keys,
-              pr.strategy AS proof_strategy, pr.error AS proof_error
+              pr.strategy AS proof_strategy, pr.method AS proof_method, pr.error AS proof_error
        FROM positions p
        JOIN fixtures f ON f.fixture_id = p.fixture_id
        LEFT JOIN settlements s ON s.position_id = p.id
        LEFT JOIN LATERAL (
-         SELECT status, result, broadcast_sig, stat_keys, strategy, error FROM proofs
+         SELECT status, result, broadcast_sig, stat_keys, strategy, method, error FROM proofs
          WHERE position_id = p.id ORDER BY id DESC LIMIT 1
        ) pr ON true
        ORDER BY p.id`
@@ -50,7 +50,7 @@ export async function GET() {
       network: "mainnet-beta",
       oracleProgram: "9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA",
       howToVerify:
-        "sha256(payloadCanonical) must equal payloadHash, which is committed in the memo tx commitSig; prevCommitSig chains the record; proofSig certifies the settlement on-chain via validate_stat_v2.",
+        "sha256(payload_canonical) must equal payload_hash, which is committed in the memo tx commit_sig; prev_commit_sig chains the record; proof_sig certifies the settlement on-chain via the oracle method named in proof_method (validate_stat_v3 multiproof, or validate_stat_v2).",
       state: agentState,
       positions: positions.rows,
       signals: signals.rows,

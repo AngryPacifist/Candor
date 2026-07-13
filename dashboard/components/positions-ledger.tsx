@@ -108,6 +108,7 @@ function Receipt({ p }: { p: PositionRow }) {
                     {truncSig(p.proof_sig, 8)} &#8599;
                   </a>{" "}
                   result={String(p.proof_result)}
+                  {p.proof_method ? <> &middot; {p.proof_method}</> : null}
                 </>
               )
             : null}
