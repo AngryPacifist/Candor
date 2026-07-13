@@ -2,8 +2,8 @@
 // or a period), fit a Poisson model of the REMAINING goals, then price any
 // market in that scope. Deterministic: caller supplies the clock (nowTs).
 //
-// Method (the Onside late-game lesson applied): the remaining-goals expectation
-// is read off the live O/U lines by inversion — never "pre-match mean minus
+// Method (a hard-won late-game lesson): the remaining-goals expectation is
+// read off the live O/U lines by inversion — never "pre-match mean minus
 // goals scored". The team split is anchored to the quoted 1X2 (AH fallback) by
 // a one-parameter least-squares fit.
 //

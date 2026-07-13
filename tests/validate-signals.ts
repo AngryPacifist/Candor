@@ -3,17 +3,20 @@
 // sample reasons under the FROZEN params.
 // Run: npx tsx tests/validate-signals.ts
 
+import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { simulateMatch } from "../src/replay/simulate.js";
 import { STRATEGY_PARAMS, STRATEGY_PARAMS_HASH } from "../src/strategy/params.js";
 import type { OddsRecord, ScoreRecord } from "../src/txline/types.js";
 
+const REPLAYS = process.env.CANDOR_REPLAYS_DIR ?? "replays";
+
 console.log(`params ${STRATEGY_PARAMS.version} hash=${STRATEGY_PARAMS_HASH.slice(0, 16)}`);
 
 for (const fixtureId of [18218149, 18198205]) {
-  const scoreRecords = readFileSync(`resources/replays/${fixtureId}.jsonl`, "utf8")
+  const scoreRecords = readFileSync(`${REPLAYS}/${fixtureId}.jsonl`, "utf8")
     .split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l) as ScoreRecord);
-  const oddsRecords = readFileSync(`resources/replays/${fixtureId}.odds.jsonl`, "utf8")
+  const oddsRecords = readFileSync(`${REPLAYS}/${fixtureId}.odds.jsonl`, "utf8")
     .split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l) as OddsRecord);
 
   const r = simulateMatch({ fixtureId, scoreRecords, oddsRecords, params: STRATEGY_PARAMS, evalMs: 5_000 });

@@ -141,9 +141,9 @@ column), positions (the ledger with expandable per-position receipts and the in-
 verifier), signals (the reasoning timeline with the daily roots interleaved), metrics
 (bankroll step curve, CLV per position, calibration, exposure), verify (the audit
 procedure), and `/api/record` (the export). The attestation strip on every page carries
-the frozen hash, ceremony link, chain tip, proof score, and export link. Design tokens
-and rules live in `branding/` (Oath Steel; elevation by background step, one accent,
-mono numerals).
+the frozen hash, ceremony link, chain tip, proof score, and export link. The design
+system is Oath Steel: elevation by background step, one accent, mono numerals; the
+logo assets ship in `dashboard/public/brand/`.
 
 ## 5. Deployment
 

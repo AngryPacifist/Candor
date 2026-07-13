@@ -9,13 +9,15 @@
 // DESTRUCTIVE: this test DELETES rows for its test fixtures and RESETS the
 // bankroll. It therefore ignores DATABASE_URL and requires a dedicated
 // database via CANDOR_TEST_DATABASE_URL (apply the schema to it first:
-// DATABASE_URL=<test db> npm run migrate). Needs the tuning recordings in
-// resources/replays/.
+// DATABASE_URL=<test db> npm run migrate). Needs the tuning recordings
+// (CANDOR_REPLAYS_DIR, default ./replays).
 // Run: CANDOR_TEST_DATABASE_URL=... npx tsx tests/validate-ledger.ts
 
+import "dotenv/config";
 import { readFileSync } from "node:fs";
 import pg from "pg";
 
+const REPLAYS = process.env.CANDOR_REPLAYS_DIR ?? "replays";
 const TEST_DB = process.env.CANDOR_TEST_DATABASE_URL;
 if (!TEST_DB) {
   console.error(
@@ -47,9 +49,9 @@ function check(name: string, ok: boolean, detail = ""): void {
 
 async function run(fixtureId: 18218149 | 18198205): Promise<void> {
   console.log(`\n═══ ${fixtureId} ═══`);
-  const scoreRecords = readFileSync(`resources/replays/${fixtureId}.jsonl`, "utf8")
+  const scoreRecords = readFileSync(`${REPLAYS}/${fixtureId}.jsonl`, "utf8")
     .split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l) as ScoreRecord);
-  const oddsRecords = readFileSync(`resources/replays/${fixtureId}.odds.jsonl`, "utf8")
+  const oddsRecords = readFileSync(`${REPLAYS}/${fixtureId}.odds.jsonl`, "utf8")
     .split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l) as OddsRecord);
 
   // clean slate for this fixture (test data only)

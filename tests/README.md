@@ -1,8 +1,8 @@
 # Tests
 
-The verification bar, runnable. Match recordings (`resources/replays/*.jsonl`) are
-captured live by the operator and are not part of the repository; tests that need them
-say so and skip or fail loudly without them.
+The verification bar, runnable. Match recordings (`*.jsonl` score and odds pairs) are
+captured live by the operator and are not part of the repository; tests read them from
+`CANDOR_REPLAYS_DIR` (default `./replays`) and skip or fail loudly without them.
 
 | Test | Needs | What it proves |
 |---|---|---|

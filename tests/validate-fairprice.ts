@@ -5,6 +5,7 @@
 // price EVERY fresh line in scope; report |model - quoted| per market bucket.
 // Run: npx tsx tests/validate-fairprice.ts
 
+import "dotenv/config";
 import { readFileSync } from "node:fs";
 import {
   DEFAULT_FAIRPRICE_CONFIG,
@@ -14,6 +15,8 @@ import {
   probAHPart1,
   probOver,
 } from "../src/model/fairprice.js";
+
+const REPLAYS = process.env.CANDOR_REPLAYS_DIR ?? "replays";
 import { lineClass, parseOddsRecord, type ParsedLine } from "../src/model/markets.js";
 import type { OddsRecord, ScoreRecord } from "../src/txline/types.js";
 
@@ -91,8 +94,8 @@ interface Bucket {
 
 function backtest(fixtureId: number): void {
   console.log(`\n— backtest ${fixtureId} —`);
-  const states = buildStateTimeline(`resources/replays/${fixtureId}.jsonl`);
-  const oddsTicks = readFileSync(`resources/replays/${fixtureId}.odds.jsonl`, "utf8")
+  const states = buildStateTimeline(`${REPLAYS}/${fixtureId}.jsonl`);
+  const oddsTicks = readFileSync(`${REPLAYS}/${fixtureId}.odds.jsonl`, "utf8")
     .split("\n")
     .filter((l) => l.trim())
     .map((l) => parseOddsRecord(JSON.parse(l) as OddsRecord))

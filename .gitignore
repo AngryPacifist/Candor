@@ -1,4 +1,4 @@
-# Project brain / internal docs (never shipped)
+# Local workspace (not part of the repository)
 .agents/
 resources/
 CLAUDE.md
@@ -16,6 +16,7 @@ CLAUDE.md
 scripts/
 tools/
 scratchpad/
+replays/
 
 # Node / build artifacts
 node_modules/

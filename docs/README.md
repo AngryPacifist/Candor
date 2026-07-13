@@ -18,6 +18,6 @@ Live surfaces the documentation refers to:
 - The audit procedure: [candor.website/verify](https://candor.website/verify)
 - Agent wallet: [`DKdqzAhvYMB3TZFZSM7M6JA3nQqmsjk5W9Smo6vq7xrE`](https://solscan.io/account/DKdqzAhvYMB3TZFZSM7M6JA3nQqmsjk5W9Smo6vq7xrE)
 
-Brand and design assets (logo kit, design tokens, the visual system) live in
-[`branding/`](../branding/). The repository overview is the
+Brand assets ship with the dashboard in
+[`dashboard/public/brand/`](../dashboard/public/brand/). The repository overview is the
 [main README](../README.md).

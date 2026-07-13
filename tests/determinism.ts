@@ -17,8 +17,11 @@ import { simulateMatch, type SimResult } from "../src/replay/simulate.js";
 import { STRATEGY_PARAMS, STRATEGY_PARAMS_HASH } from "../src/strategy/params.js";
 import type { OddsRecord, ScoreRecord } from "../src/txline/types.js";
 
+// Recordings live wherever the operator keeps them (CANDOR_REPLAYS_DIR,
+// default ./replays); they are not part of the repository.
+const REPLAYS = process.env.CANDOR_REPLAYS_DIR ?? "replays";
 const FIXTURES = [18218149, 18198205, 18213979, 18222446].filter((id) =>
-  existsSync(`resources/replays/${id}.odds.jsonl`)
+  existsSync(`${REPLAYS}/${id}.odds.jsonl`)
 );
 
 // Frozen-replay ground truth at the frozen params (the documented tuning sweep:
@@ -32,9 +35,9 @@ const FROZEN_EXPECT: Record<number, { entries: number; pnlUnits: number }> = {
 };
 
 function simArtifacts(fixtureId: number): { r: SimResult; digest: string } {
-  const scoreRecords = readFileSync(`resources/replays/${fixtureId}.jsonl`, "utf8")
+  const scoreRecords = readFileSync(`${REPLAYS}/${fixtureId}.jsonl`, "utf8")
     .split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l) as ScoreRecord);
-  const oddsRecords = readFileSync(`resources/replays/${fixtureId}.odds.jsonl`, "utf8")
+  const oddsRecords = readFileSync(`${REPLAYS}/${fixtureId}.odds.jsonl`, "utf8")
     .split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l) as OddsRecord);
   const r = simulateMatch({ fixtureId, scoreRecords, oddsRecords, params: STRATEGY_PARAMS, evalMs: 5_000 });
 
