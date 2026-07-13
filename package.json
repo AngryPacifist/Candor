@@ -11,9 +11,11 @@
   },
   "license": "UNLICENSED",
   "devDependencies": {
+    "@solana/spl-token": "^0.4.15",
     "@types/bn.js": "^5.2.0",
     "@types/node": "^26.1.1",
     "@types/pg": "^8.11.0",
+    "tweetnacl": "^1.0.3",
     "typescript": "^7.0.2"
   },
   "dependencies": {
