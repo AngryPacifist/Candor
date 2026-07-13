@@ -50,7 +50,9 @@ TxL token is used for data access, never traded.
 
 ## The honesty protocol
 
-Four mechanisms, all live on mainnet from the agent's own wallet
+Full specification with the exact byte formats, threat model, and live artifacts:
+[`docs/trust-layer.md`](docs/trust-layer.md). The short version: four mechanisms, all
+live on mainnet from the agent's own wallet
 ([`DKdqzAhvYMB3TZFZSM7M6JA3nQqmsjk5W9Smo6vq7xrE`](https://solscan.io/account/DKdqzAhvYMB3TZFZSM7M6JA3nQqmsjk5W9Smo6vq7xrE)).
 
 ### 1. Commit at decision time
@@ -176,7 +178,9 @@ CLV on winning positions is reported in the same register as the wins.
 
 ## Architecture
 
-Two small services and a database, deliberately boring:
+Two small services and a database, deliberately boring. The full chapter, including the
+bootstrap order, every runtime loop, warmup, the data model, and the failure-mode table:
+[`docs/architecture.md`](docs/architecture.md).
 
 ```mermaid
 flowchart LR
@@ -230,7 +234,9 @@ determinism suite runs over whichever recordings exist locally.
 ## Exactly how TxLINE is used
 
 Candor consumes the TxLINE mainnet real-time subscription (World Cup and International
-Friendlies service level), plus the Solana programs it anchors to. Every surface, from
+Friendlies service level), plus the Solana programs it anchors to. The full chapter,
+including stream operational behavior, payload anatomy, and the corrected period-band
+table: [`docs/txline-integration.md`](docs/txline-integration.md). Every surface, from
 [`src/txline/client.ts`](src/txline/client.ts):
 
 | Surface | Use |
@@ -321,7 +327,8 @@ src/
   worker/     bootstrap (health-first, named env validation) + the autonomy loop
   db/         schema (nine tables) + migration
 dashboard/    public read-only Next.js app: record, receipts, charts, verifier
-docs/         how-candor-trades.md (the strategy) · params-tuning.md (the derivation)
+docs/         trust-layer.md · txline-integration.md · architecture.md ·
+              how-candor-trades.md (the strategy) · params-tuning.md (the derivation)
 tests/        determinism suite (decisions + on-chain artifacts + grader parity)
 ```
 
