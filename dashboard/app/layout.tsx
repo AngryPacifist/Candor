@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://candor.up.railway.app"),
+  metadataBase: new URL("https://candor.website"),
   title: "Candor",
   description: "The trading agent that cannot lie about its record.",
   openGraph: {
