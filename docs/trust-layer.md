@@ -18,7 +18,7 @@ are each closed by a separate on-chain mechanism:
 | Delete a loser | the hash chain: every commit names its predecessor, so a gap is visible |
 | Misreport an outcome | settlement proofs: the oracle's validate_stat calls certify the win condition against TxODDS's root |
 | Tune the strategy after the fact | the frozen-params hash in every commit, anchored by the freeze ceremony |
-| Curate the narrative | daily Merkle roots over the complete signal log, passes included |
+| Curate the narrative | daily Merkle roots seal the day's signal log, so no logged signal (an entry or a declined candidate) can be edited, deleted, or inserted after the fact |
 
 We call this construction **the Candor protocol**: it is not specific to this agent, and
 any signal vendor, fund, or trading desk could run the same commit, prove, freeze, and
@@ -215,7 +215,10 @@ way, autonomously, five minutes after settlement.
 
 ## 5. The daily decisions root
 
-Positions prove what the agent did; the decisions root proves what it considered.
+Positions prove what the agent did; the decisions root makes the day's signal log
+tamper-evident. That log holds every position and every candidate the strategy flagged but
+then declined on sizing or exposure grounds; it is not a log of every evaluation, because
+when the model agrees with the market no candidate arises and nothing is written.
 [`src/chain/decisions-root.ts`](../src/chain/decisions-root.ts), once per completed UTC
 day:
 
@@ -273,14 +276,18 @@ What the protocol does **not** claim, stated so the claim it does make stays sha
   the process. It proves when the decision existed and that the frozen parameters signed
   it; determinism ([`tests/determinism.ts`](../tests/determinism.ts)) plus the public
   code make "a human picked this" an expensive lie to maintain, but the cryptographic
-  claim is about time, content, and completeness.
+  claim is about time and content; it makes no claim about intent.
 - **Match truth is TxODDS's root.** The proofs certify claims against the roots TxODDS
   anchors; if the oracle's data were wrong, the proofs would be faithfully wrong with it.
   That trust is explicit, singular, and inspectable on-chain.
-- **Omission before commitment.** A position whose commit never landed would be visible
-  as `commit_status = failed` in the export and as a hole against the signal log and its
-  daily root; the window for quiet omission is the commit retry window, and it leaves
-  tracks in the reasoning trail.
+- **The signal log is not a log of every evaluation.** It records positions and the
+  candidates the strategy flagged but declined (on sizing or exposure); the far more
+  numerous ticks where the model agreed with the market are not logged. What the daily
+  root guarantees is that the logged set is tamper-evident. The stronger anti-hiding
+  property comes from the commit chain: every position that traded is an on-chain commit,
+  so a hidden trade would surface as a commit with no matching signal, and a commit that
+  never landed is visible as `commit_status = failed`. The only window for quiet omission
+  is that commit retry window, and it leaves tracks.
 
 Within those boundaries the record is what it claims: timestamped before outcomes,
 append-only, outcome-certified, parameter-bound, and narrative-sealed.

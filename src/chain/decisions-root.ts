@@ -1,8 +1,10 @@
 // Daily decisions-root commit: once per completed UTC day, the Merkle root of
-// EVERY signal the agent logged (entries and passes alike) goes on mainnet in
-// one memo. Even the decisions not to trade become tamper-evident. Chained
-// like position commits. Third parties recompute the root from the signals in
-// the public record export.
+// every signal the agent logged that day goes on mainnet in one memo. The
+// logged signals are the positions it opened and the candidates it flagged but
+// declined on sizing or exposure grounds; the routine evaluations where no
+// candidate arose are not logged. Sealing makes that logged set tamper-evident.
+// Chained like position commits. Third parties recompute the root from the
+// signals in the public record export.
 
 import {
   ComputeBudgetProgram,

@@ -158,7 +158,7 @@ export default async function OverviewPage() {
           }
         >
           {signals.length === 0 ? (
-            <Empty>No decisions logged yet. Every entry and every meaningful pass lands here with its reasoning.</Empty>
+            <Empty>No decisions logged yet. Every position, and every candidate it flags but passes on, lands here with its reasoning.</Empty>
           ) : (
             <div>
               {signals.map((s) => (

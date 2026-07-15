@@ -127,7 +127,7 @@ zero open positions and do nothing), which was exercised on the first cloud depl
 | `match_state` | one row per fixture: phase, clock, score, **stat bands**, `finalised_seq` | upsert guarded by `last_seq`; stats fold latest-value (VAR) |
 | `odds_latest` | newest quote per market line | PK is the full line identity; `ts`-guarded upsert |
 | `odds_history` | every tick, append-only | movement windows and CLV horizon quotes read this |
-| `signals` | every decision, `enter` and `pass`, with reason and model inputs | leaves of the daily Merkle root |
+| `signals` | every position (`enter`) and every candidate declined on sizing or exposure (`pass`), with reason and model inputs | leaves of the daily Merkle root |
 | `positions` | the ledger: entry facts + `payload_canonical`, `payload_hash`, `params_hash`, commit chain fields | `commit_status`: pending / committed / failed |
 | `settlements` | outcome, P&L, `bankroll_after`, CLV at the frozen horizon, evidence JSON | bankroll moves only here |
 | `proofs` | every proof attempt: status, oracle method, stat keys, strategy JSON, result, signature or error | full history kept; latest row is the position's proof state |

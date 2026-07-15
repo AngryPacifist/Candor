@@ -136,10 +136,13 @@ derivation, including its dead ends, is documented in
 
 ### 4. Seal the reasoning trail
 
-Every decision the agent takes, including passes, is logged with its inputs and reasoning.
-Once per UTC day the worker builds a Merkle tree over the day's full signal log and
-commits the root to mainnet (`candor|v1|decisions|<date>|root:…|n:…|prev:…`), so even the
-narrative around the record is provably unedited after the fact
+Every position the agent opens, and every trade candidate it flags but turns down on
+sizing or exposure grounds, is logged with its inputs and reasoning; the routine
+evaluations where the model agrees with the market and no candidate arises are not logged.
+Once per UTC day the worker builds a Merkle tree over that day's signal log and commits the
+root to mainnet (`candor|v1|decisions|<date>|root:…|n:…|prev:…`), so no logged signal can
+be edited, deleted, or inserted after the day closes. Because every trade is itself a
+commit on-chain, a hidden position would show as a commit with no matching signal
 (source: [`src/chain/decisions-root.ts`](src/chain/decisions-root.ts)).
 
 ## Verify the record yourself

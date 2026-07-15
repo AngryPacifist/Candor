@@ -95,14 +95,18 @@ layer broadcasts that hash to Solana mainnet in a memo within seconds, chained t
 previous commit, before the outcome exists. Settlement happens autonomously at the feed's
 `game_finalised` record using the empirically verified period bands (regulation is the
 1000 band plus the 3000 band; extra time lives in the 4000 and 7000 bands). Each settled
-position is then proven on-chain via `validate_stat_v2`: the position's exact win condition
-compiled to predicates over the certified stats, or, for full-match markets in extra-time
-matches, exact certification of the regulation components. Closing-line value is measured
+position is then proven on-chain via the oracle's validate_stat call (`validate_stat_v3`
+multiproofs since TxODDS's 2026-07-13 mainnet promotion, `validate_stat_v2` as the
+automatic fallback): the position's exact win condition compiled to predicates over the
+certified stats, or, for full-match markets in extra-time matches, exact certification of
+the regulation components. Closing-line value is measured
 at a fixed 10-minute horizon, and calibration (Brier) is published model-versus-market.
 
-Every decision, including every pass with its reason, lands in the signal log, and each UTC
-day's complete log is committed to mainnet as a Merkle root. The agent that trades twice a
-night can prove it wasn't hiding a hundred other trades.
+Every position, and every candidate the scan flags but the sizing or exposure gates turn
+down, lands in the signal log with its reason; each UTC day's log is committed to mainnet
+as a Merkle root, so nothing logged can be altered after the day closes. And because every
+trade is a commit on-chain, the agent that trades twice a night cannot hide a hundred
+others: a hundred trades would be a hundred commits.
 
 ## 7. Why so few trades
 

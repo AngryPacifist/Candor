@@ -13,7 +13,7 @@ export default async function SignalsPage() {
       <AutoRefresh seconds={30} />
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h1 className="text-base font-bold tracking-[-0.01em]">Signal log</h1>
-        <span className="text-xs text-faint">every decision, including the ones not taken</span>
+        <span className="text-xs text-faint">positions taken, and any candidate flagged but passed on</span>
       </div>
       <Panel title={`Decisions (${signals.length})`}>
         <div className="grid gap-4">
@@ -21,8 +21,8 @@ export default async function SignalsPage() {
         </div>
       </Panel>
       <p className="text-xs leading-relaxed text-faint">
-        Each day&apos;s full signal log is sealed into a Merkle root and committed to mainnet,
-        so the reasoning trail is provably unedited after the fact.
+        Each day&apos;s signal log is sealed into a Merkle root and committed to mainnet,
+        so the logged reasoning is provably unedited after the fact.
       </p>
     </>
   );
