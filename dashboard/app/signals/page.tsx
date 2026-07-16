@@ -21,8 +21,9 @@ export default async function SignalsPage() {
         </div>
       </Panel>
       <p className="text-xs leading-relaxed text-faint">
-        Each day&apos;s signal log is sealed into a Merkle root and committed to mainnet,
-        so the logged reasoning is provably unedited after the fact.
+        Each day with signals is sealed into a Merkle root and committed to mainnet, so the
+        logged reasoning is provably unedited after the fact. A day with no root logged
+        nothing; the next root chains straight over it.
       </p>
     </>
   );

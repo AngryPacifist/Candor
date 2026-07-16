@@ -84,7 +84,7 @@ stays linear, retried on failure, and marked `failed` visibly if mainnet cannot 
 (source: [`src/chain/commit.ts`](src/chain/commit.ts)).
 
 A real example, from the live record: position #4 (Under 1.5 first-half goals, Argentina v
-Switzerland, World Cup quarterfinal) was committed at 01:01:38 UTC, one minute after
+Switzerland, World Cup quarterfinal) was committed at 01:01:38 UTC, ninety seconds after
 kickoff, hours before the outcome existed:
 [`43P8YQpf…`](https://solscan.io/tx/43P8YQpfANktVPWrkFYfHAYCTSwX62jw1twjis4sB9aLPoM5fATYGKRSDGckV6LiX7zRMM62BHxgXFGmJctN4QJD).
 
@@ -139,9 +139,11 @@ derivation, including its dead ends, is documented in
 Every position the agent opens, and every trade candidate it flags but turns down on
 sizing or exposure grounds, is logged with its inputs and reasoning; the routine
 evaluations where the model agrees with the market and no candidate arises are not logged.
-Once per UTC day the worker builds a Merkle tree over that day's signal log and commits the
-root to mainnet (`candor|v1|decisions|<date>|root:…|n:…|prev:…`), so no logged signal can
-be edited, deleted, or inserted after the day closes. Because every trade is itself a
+After each UTC day that logged at least one signal, the worker builds a Merkle tree over
+that day's log and commits the root to mainnet
+(`candor|v1|decisions|<date>|root:…|n:…|prev:…`), so no logged signal can be edited,
+deleted, or inserted after the day closes. Quiet days produce no root, and each root's
+`prev` chains over them, so one cannot be inserted later. Because every trade is itself a
 commit on-chain, a hidden position would show as a commit with no matching signal
 (source: [`src/chain/decisions-root.ts`](src/chain/decisions-root.ts)).
 

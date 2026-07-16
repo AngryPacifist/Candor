@@ -225,7 +225,7 @@ tamper-evident. That log holds every position and every candidate the strategy f
 then declined on sizing or exposure grounds; it is not a log of every evaluation, because
 when the model agrees with the market no candidate arises and nothing is written.
 [`src/chain/decisions-root.ts`](../src/chain/decisions-root.ts), once per completed UTC
-day:
+day that logged at least one signal:
 
 - **Leaf**: `sha256(canonicalJson({id, ts, fixtureId, family, marketKey, side, edge,
   decision, reason}))` for every signal logged that day, entries and passes alike, in id
@@ -241,6 +241,12 @@ candor|v1|decisions|<YYYY-MM-DD>|root:<64-char root>|n:<leaf count>|prev:<previo
 The record export serves every signal with exactly the leaf fields, so a third party
 recomputes the root with thirty lines of code. Editing, deleting, or inserting a signal
 after the day closes changes the root and contradicts the chain.
+
+Days with no logged signals are skipped, not sealed with the empty root: 2026-07-13 and
+2026-07-15 (a semifinal the agent watched without trading) produced no signals and have
+no root. The chain closes over such gaps, because each root's `prev` names the previous
+root's signature; the 2026-07-14 root links straight back to 2026-07-12's, so a root for
+a quiet day cannot be inserted afterwards.
 
 ## 6. The record export and the in-browser verifier
 
