@@ -89,6 +89,36 @@ export default async function VerifyPage() {
             export, hash it with sha256 in any tool you like, and it must equal the committed
             hash. The verify button on every position does exactly this, in your browser.
           </p>
+          <p className="text-[13.5px] leading-relaxed text-muted">
+            A careful auditor walking the chain will reach its genesis: a{" "}
+            <a
+              href={solscanTx(
+                "2Zyw4jsXbQRQLywfMDmybGzCktrXb6EHuPdhCZPhu8xQcMFDegoovZGGDAzdmQ7Pwv4ZmvhtxYV1BgtsFnzgUiD4"
+              )}
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent"
+            >
+              rehearsal commit&#8599;
+            </a>{" "}
+            placed pre-deployment on a replay of an already-finished match, to prove the
+            pipeline before the record began. Its block time is visibly after that match ended,
+            so it makes no pre-outcome claim, and{" "}
+            <a
+              href={solscanTx(
+                "61LDQhUborc5C8T5FKsUNSARsyzCWueXZ7X1C6qgp6cKA2uNQcZ6YiuY8wd5FsnUD1AWWccoKXhkDRZnMHvGWPV4"
+              )}
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent"
+            >
+              its proof&#8599;
+            </a>{" "}
+            certified a loss: the wallet&apos;s first proof transaction. The paper bankroll was
+            re-based to 1,000.00 when the parameters froze, which is why the committed payloads
+            of the first two positions carry earlier bankroll figures than the curve. Nothing
+            on the chain was edited.
+          </p>
         </Step>
 
         <Step n="02" title="The settlement proofs">

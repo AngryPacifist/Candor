@@ -101,7 +101,8 @@ hash binds the full decision content; `prev` makes the sequence append-only. To 
 whole record: walk the agent wallet's memo transactions, check each `prev` names the
 previous commit, and check every `payload_hash` appears in the record export with a
 payload that re-hashes to it. A deleted position breaks the walk; an invented one has no
-pre-outcome timestamp.
+pre-outcome timestamp. The walk ends at `prev:genesis`, which is the pre-deployment
+rehearsal commit, documented with its transactions in §7.
 
 ## 2. The freeze ceremony
 
@@ -115,10 +116,14 @@ the freeze itself was committed to mainnet
 candor|v1|freeze|candor-params-v1|params:<full 64-char hash>
 ```
 
-Every subsequent position commit carries the first 16 characters of that hash. The claim
-this construction makes precise: **any position committed after the ceremony was decided
-by exactly the parameters the ceremony froze.** Changing a threshold changes the hash,
-and the seam would be public. Code may still be fixed mid-run (a deploy is visible as an
+Every position commit in the record, from the very first, carries the first 16
+characters of that hash. Two positions (#3 and #4) were opened during the pre-deployment
+rehearsal window, hours before the ceremony transaction itself; the parameters were
+frozen in code first and published in full at the ceremony, so those two are bound by
+the hash embedded in their own pre-outcome commits and payloads, while everything from
+#5 onward is additionally covered by block-time ordering alone: **any position committed
+after the ceremony was decided by exactly the parameters the ceremony froze.** Changing
+a threshold changes the hash, and the seam would be public. Code may still be fixed mid-run (a deploy is visible as an
 epoch in the commit stream); parameters may not, and were not. How the values were
 derived, dead ends included, is [`params-tuning.md`](params-tuning.md).
 
@@ -262,11 +267,34 @@ path), and check the memo carries the recomputed hash and the chain link.
 | Position #4 commit (one minute after kickoff) | [`43P8YQpf…`](https://solscan.io/tx/43P8YQpfANktVPWrkFYfHAYCTSwX62jw1twjis4sB9aLPoM5fATYGKRSDGckV6LiX7zRMM62BHxgXFGmJctN4QJD) |
 | Position #4 proof (self-healed via the retry sweep) | [`21tPRJdm…`](https://solscan.io/tx/21tPRJdmUFfkYZhKRASW5LuQPWDos2LveKpDPaHxuu5giF7eaj6wjqm7637WoGi8wWm4GDpRPX7feuEVfRH8w3uS) |
 | First daily decisions root (2026-07-11, n=1) | [`3UBFfGzN…`](https://solscan.io/tx/3UBFfGzNuNMjRoYQQPKwZDbyJEsWtKzeQYrqftD4ax5jHnCAmcvji5UJXUezVwn5MKWC6Mwbjv7NYDfmVJTpD5Pi) |
+| Chain genesis: the rehearsal commit (pre-freeze pipeline test, visibly post-outcome) | [`2Zyw4jsX…`](https://solscan.io/tx/2Zyw4jsXbQRQLywfMDmybGzCktrXb6EHuPdhCZPhu8xQcMFDegoovZGGDAzdmQ7Pwv4ZmvhtxYV1BgtsFnzgUiD4) |
+| The wallet's first proof: the rehearsal loss, `result=false` | [`61LDQhUb…`](https://solscan.io/tx/61LDQhUborc5C8T5FKsUNSARsyzCWueXZ7X1C6qgp6cKA2uNQcZ6YiuY8wd5FsnUD1AWWccoKXhkDRZnMHvGWPV4) |
+| Step-0 format probe (v0 memo, its own `prev:genesis`) | [`3dpwNoNk…`](https://solscan.io/tx/3dpwNoNkq6XWLB8ymWB54LhQKZkf1nTUSTrw2KW3xdoGa8Cjz3XFrjKwy2DcEHszbsVLhrkDJib3qL9vNSDvqF9o) |
 
 Agent wallet:
 [`DKdqzAhvYMB3TZFZSM7M6JA3nQqmsjk5W9Smo6vq7xrE`](https://solscan.io/account/DKdqzAhvYMB3TZFZSM7M6JA3nQqmsjk5W9Smo6vq7xrE) ·
 oracle program:
 [`9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA`](https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA).
+
+### The record's genesis, stated plainly
+
+Walk the commit chain back from position #3 and it ends at `prev:genesis`: a rehearsal
+position committed at 2026-07-11 19:14 UTC to prove the whole pipeline before anything
+was at stake. It was placed on a replay recording of a match that had already finished,
+so its own block time is visibly after that match's outcome; it makes no pre-outcome
+claim and was never part of the record. Its settlement proof, broadcast three seconds
+later, is the wallet's first proof transaction, and it certified a loss
+(`result=false`, program return `0x00`). Both transactions stay on-chain, in the table
+above.
+
+At the parameter freeze the rehearsal rows were retired from the ledger and the paper
+bankroll re-based to a clean 1,000.00 over the kept record. Positions #3 and #4 were
+opened during that rehearsal window (under the already-frozen parameters, as their
+memos show), so their immutable committed payloads carry the pre-rebase bankroll
+figures (987.72 and 1001.70) while the dashboard draws the re-based trajectory. That
+difference is the re-base, not an edit; the chain was never touched. The wallet's
+entire pre-record activity is three funding transfers and the three transactions
+tabled above.
 
 ## 8. Threat model, honestly
 

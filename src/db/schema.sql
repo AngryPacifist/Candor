@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS odds_history (
 CREATE INDEX IF NOT EXISTS odds_history_line_ts
   ON odds_history (fixture_id, super_odds_type, market_period, market_parameters, ts);
 
--- Every decision the agent takes, including "no trade". The audit trail.
+-- The audit trail: every position taken, and every candidate the strategy
+-- flagged but declined on sizing or exposure grounds. (Not every evaluation:
+-- when the model agrees with the market, no candidate arises.)
 CREATE TABLE IF NOT EXISTS signals (
   id            BIGSERIAL PRIMARY KEY,
   ts            TIMESTAMPTZ NOT NULL DEFAULT now(),
