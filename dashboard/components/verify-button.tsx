@@ -13,9 +13,11 @@ interface Step {
   detail?: string;
 }
 
-// Public, CORS-friendly RPCs tried in order. The visitor's browser talks to
-// the chain directly; this site is not in the trust path.
-const RPCS = ["https://solana-rpc.publicnode.com", "https://api.mainnet-beta.solana.com"];
+// The visitor's browser reads the commit transaction straight from a Solana RPC,
+// so this site is never in its own trust path. The endpoint comes from a build-time
+// public env var: point NEXT_PUBLIC_SOLANA_RPC_URL at any keyless, CORS-enabled RPC
+// you trust (it ships in the browser bundle, so it must never carry an API key).
+const RPCS = [process.env.NEXT_PUBLIC_SOLANA_RPC_URL].filter((u): u is string => Boolean(u));
 
 async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
